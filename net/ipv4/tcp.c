@@ -3006,6 +3006,16 @@ static int do_tcp_getsockopt(struct sock *sk, int level,
 	case TCP_MULTIPATH_NDIFFPORTS:
 		val = tp->ndiffports;
 		break;
+		
+	case TCP_MULTIPATH_PATHMANAGER:
+		if (get_user(len, optlen))
+			return -EFAULT;
+		len = min_t(unsigned int, len, MPTCP_PM_NAME_MAX);
+		if (put_user(len, optlen))
+			return -EFAULT;
+		if (copy_to_user(optval, tp->mptcp_pm->name, len))
+			return -EFAULT;
+		return 0;
 	}
 
 	if (put_user(len, optlen))

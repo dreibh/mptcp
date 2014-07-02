@@ -2517,6 +2517,10 @@ static int do_tcp_setsockopt(struct sock *sk, int level,
 			return -EFAULT;
 		return 0;
 	}
+	case TCP_MULTIPATH_ADD:
+	case TCP_MULTIPATH_REMOVE:
+		/* Implement Me! */
+		return -EOPNOTSUPP;
 	default:
 		/* fallthru */
 		break;
@@ -3006,7 +3010,11 @@ static int do_tcp_getsockopt(struct sock *sk, int level,
 	case TCP_MULTIPATH_NDIFFPORTS:
 		val = tp->ndiffports;
 		break;
-		
+	case TCP_MULTIPATH_SUBFLOWS:
+	case TCP_MULTIPATH_CONNID:
+		/* Implement Me! */
+		return -EOPNOTSUPP;
+
 	case TCP_MULTIPATH_PATHMANAGER:
 		if (get_user(len, optlen))
 			return -EFAULT;

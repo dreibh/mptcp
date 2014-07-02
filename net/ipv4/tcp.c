@@ -2767,11 +2767,11 @@ static int do_tcp_setsockopt(struct sock *sk, int level,
 		else
 			tp->debug_on = val;
 		break;
-	case TCP_MULTIPATH_DISABLED:
+	case TCP_MULTIPATH_ENABLED:
 		if (val < 0 || val > 1)
 			err = -EINVAL;
 		else
-			tp->mptcp_disabled = val;
+			tp->mptcp_disabled = !val;
 		break;
 	case TCP_MULTIPATH_NDIFFPORTS:
 		if (val < 0)

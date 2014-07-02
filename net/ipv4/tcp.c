@@ -2497,7 +2497,7 @@ static int do_tcp_setsockopt(struct sock *sk, int level,
 		release_sock(sk);
 		return err;
 	}
-	case TCP_MPTCPPATHMANAGER: {
+	case TCP_MULTIPATH_PATHMANAGER: {
 		char name[MPTCP_PM_NAME_MAX];
 
 		if (optlen < 1)
@@ -2761,19 +2761,19 @@ static int do_tcp_setsockopt(struct sock *sk, int level,
 		else
 			tp->tsoffset = val - tcp_time_stamp;
 		break;
-	case TCP_MPTCPDEBUG:
+	case TCP_MULTIPATH_DEBUG:
 		if (val < 0 || val > 1)
 			err = -EINVAL;
 		else
 			tp->debug_on = val;
 		break;
-	case TCP_MPTCPDISABLED:
+	case TCP_MULTIPATH_DISABLED:
 		if (val < 0 || val > 1)
 			err = -EINVAL;
 		else
 			tp->mptcp_disabled = val;
 		break;
-	case TCP_MPTCPNDIFFPORTS:
+	case TCP_MULTIPATH_NDIFFPORTS:
 		if (val < 0)
 			err = -EINVAL;
 		else

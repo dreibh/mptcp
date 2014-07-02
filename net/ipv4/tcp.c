@@ -2771,7 +2771,7 @@ static int do_tcp_setsockopt(struct sock *sk, int level,
 		if (val < 0 || val > 1)
 			err = -EINVAL;
 		else
-			tp->mptcp_disabled = !val;
+			tp->mptcp_disabled = (val == 0);
 		break;
 	case TCP_MULTIPATH_NDIFFPORTS:
 		if (val < 0)
@@ -2996,7 +2996,16 @@ static int do_tcp_getsockopt(struct sock *sk, int level,
 		val = tcp_time_stamp + tp->tsoffset;
 		break;
 	default:
-		return -ENOPROTOOPT;
+
+	case TCP_MULTIPATH_DEBUG:
+		val = tp->debug_on;
+		break;
+	case TCP_MULTIPATH_ENABLED:
+		val = (tp->mptcp_disabled == 0);
+		break;
+	case TCP_MULTIPATH_NDIFFPORTS:
+		val = tp->ndiffports;
+		break;
 	}
 
 	if (put_user(len, optlen))

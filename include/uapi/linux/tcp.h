@@ -111,6 +111,10 @@ enum {
 #define TCP_REPAIR_OPTIONS	22
 #define TCP_FASTOPEN		23	/* Enable FastOpen on listeners */
 #define TCP_TIMESTAMP		24
+#define TCP_MPTCPDEBUG		25	/* MPTCP DEBUG on/off */
+#define TCP_MPTCPDISABLED	26	/* MPTCP DISABLED on/off */
+#define TCP_MPTCPNDIFFPORTS	27	/* MPTCP NDIFFPORTS */
+#define TCP_MPTCPPATHMANAGER	28	/* MPTCP PATHMANAGER */
 
 struct tcp_repair_opt {
 	__u32	opt_code;

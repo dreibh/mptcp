@@ -1573,6 +1573,8 @@ void mptcp_parse_options(const uint8_t *ptr, int opsize,
 	case MPTCP_SUB_CAPABLE:
 	{
 		struct mp_capable *mpcapable = (struct mp_capable *)ptr;
+		struct sock *sk = skb ? skb->sk : NULL;
+		struct tcp_sock *tp = tcp_sk(sk);
 
 		if (opsize != MPTCP_SUB_LEN_CAPABLE_SYN &&
 		    opsize != MPTCP_SUB_LEN_CAPABLE_ACK) {
@@ -1581,7 +1583,7 @@ void mptcp_parse_options(const uint8_t *ptr, int opsize,
 			break;
 		}
 
-		if (!sysctl_mptcp_enabled)
+		if (!sysctl_mptcp_enabled || (tp && tp->mptcp_disabled))
 			break;
 
 		/* We only support MPTCP version 0 */

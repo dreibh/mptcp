@@ -182,6 +182,9 @@ static inline struct tcp_request_sock *tcp_rsk(const struct request_sock *req)
 	return (struct tcp_request_sock *)req;
 }
 
+// forward declaration
+struct mptcp_pm_ops;
+
 struct tcp_sock {
 	/* inet_connection_sock has to be the first member of tcp_sock */
 	struct inet_connection_sock	inet_conn;
@@ -399,6 +402,10 @@ struct tcp_sock {
 	u32		mptcp_loc_token;
 	u64		mptcp_loc_key;
 #endif /* CONFIG_MPTCP */
+	u8		mptcp_disabled;
+	int		ndiffports;
+	u8		debug_on;
+	struct mptcp_pm_ops *mptcp_pm;
 };
 
 enum tsq_flags {

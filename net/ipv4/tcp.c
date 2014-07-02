@@ -2465,6 +2465,8 @@ static int tcp_repair_options_est(struct tcp_sock *tp,
 	return 0;
 }
 
+struct mptcp_pm_ops *mptcp_pm_find(const char *name);
+
 /*
  *	Socket option code for TCP.
  */
@@ -2494,6 +2496,26 @@ static int do_tcp_setsockopt(struct sock *sk, int level,
 		err = tcp_set_congestion_control(sk, name);
 		release_sock(sk);
 		return err;
+	}
+	case TCP_MPTCPPATHMANAGER: {
+		char name[MPTCP_PM_NAME_MAX];
+
+		if (optlen < 1)
+			return -EINVAL;
+
+		val = strncpy_from_user(name, optval,
+					min_t(long, MPTCP_PM_NAME_MAX-1, optlen));
+		if (val < 0)
+			return -EFAULT;
+		name[val] = 0;
+
+		lock_sock(sk);
+		tp->mptcp_pm = mptcp_pm_find(name);
+		release_sock(sk);
+
+		if (!tp->mptcp_pm)
+			return -EFAULT;
+		return 0;
 	}
 	default:
 		/* fallthru */
@@ -2738,6 +2760,24 @@ static int do_tcp_setsockopt(struct sock *sk, int level,
 			err = -EPERM;
 		else
 			tp->tsoffset = val - tcp_time_stamp;
+		break;
+	case TCP_MPTCPDEBUG:
+		if (val < 0 || val > 1)
+			err = -EINVAL;
+		else
+			tp->debug_on = val;
+		break;
+	case TCP_MPTCPDISABLED:
+		if (val < 0 || val > 1)
+			err = -EINVAL;
+		else
+			tp->mptcp_disabled = val;
+		break;
+	case TCP_MPTCPNDIFFPORTS:
+		if (val < 0)
+			err = -EINVAL;
+		else
+			tp->ndiffports = val;
 		break;
 	default:
 		err = -ENOPROTOOPT;

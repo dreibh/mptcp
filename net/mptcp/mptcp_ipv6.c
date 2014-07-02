@@ -501,7 +501,7 @@ int mptcp_v6_add_raddress(struct mptcp_cb *mpcb, const struct in6_addr *addr,
 		 */
 		if (rem6->id == id) {
 			/* update the address */
-			mptcp_debug("%s: updating old addr: %pI6 to addr %pI6 with id:%d\n",
+			mptcp_debug2(mpcb, "%s: updating old addr: %pI6 to addr %pI6 with id:%d\n",
 				    __func__, &rem6->addr, addr, id);
 			rem6->addr = *addr;
 			rem6->port = port;
@@ -513,7 +513,7 @@ int mptcp_v6_add_raddress(struct mptcp_cb *mpcb, const struct in6_addr *addr,
 	i = mptcp_find_free_index(mpcb->rem6_bits);
 	/* Do we have already the maximum number of local/remote addresses? */
 	if (i < 0) {
-		mptcp_debug("%s: At max num of remote addresses: %d --- not adding address: %pI6\n",
+		mptcp_debug2(mpcb, "%s: At max num of remote addresses: %d --- not adding address: %pI6\n",
 			    __func__, MPTCP_MAX_ADDR, addr);
 		return -1;
 	}
@@ -707,7 +707,7 @@ int mptcp_init6_subsockets(struct sock *meta_sk, const struct mptcp_loc6 *loc,
 
 	ret = inet6_create(sock_net(meta_sk), &sock, IPPROTO_TCP, 1);
 	if (unlikely(ret < 0)) {
-		mptcp_debug("%s inet6_create failed ret: %d\n", __func__, ret);
+		mptcp_debug2(tcp_sk(meta_sk)->mpcb, "%s inet6_create failed ret: %d\n", __func__, ret);
 		return ret;
 	}
 
@@ -742,12 +742,12 @@ int mptcp_init6_subsockets(struct sock *meta_sk, const struct mptcp_loc6 *loc,
 
 	ret = sock.ops->bind(&sock, (struct sockaddr *)&loc_in, ulid_size);
 	if (ret < 0) {
-		mptcp_debug("%s: MPTCP subsocket bind()failed, error %d\n",
+		mptcp_debug2(tcp_sk(meta_sk)->mpcb, "%s: MPTCP subsocket bind()failed, error %d\n",
 			    __func__, ret);
 		goto error;
 	}
 
-	mptcp_debug("%s: token %#x pi %d src_addr:%pI6:%d dst_addr:%pI6:%d\n",
+	mptcp_debug2(tcp_sk(meta_sk)->mpcb, "%s: token %#x pi %d src_addr:%pI6:%d dst_addr:%pI6:%d\n",
 		    __func__, tcp_sk(meta_sk)->mpcb->mptcp_loc_token,
 		    tp->mptcp->path_index, &loc_in.sin6_addr,
 		    ntohs(loc_in.sin6_port), &rem_in.sin6_addr,
@@ -756,7 +756,7 @@ int mptcp_init6_subsockets(struct sock *meta_sk, const struct mptcp_loc6 *loc,
 	ret = sock.ops->connect(&sock, (struct sockaddr *)&rem_in,
 				ulid_size, O_NONBLOCK);
 	if (ret < 0 && ret != -EINPROGRESS) {
-		mptcp_debug("%s: MPTCP subsocket connect() failed, error %d\n",
+		mptcp_debug2(tcp_sk(meta_sk)->mpcb, "%s: MPTCP subsocket connect() failed, error %d\n",
 			    __func__, ret);
 		goto error;
 	}

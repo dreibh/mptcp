@@ -2771,7 +2771,7 @@ static int do_tcp_setsockopt(struct sock *sk, int level,
 		else
 			tp->debug_on = val;
 		break;
-	case TCP_MULTIPATH_ENABLED:
+	case TCP_MULTIPATH_ENABLE:
 		if (val < 0 || val > 1)
 			err = -EINVAL;
 		else
@@ -3004,7 +3004,7 @@ static int do_tcp_getsockopt(struct sock *sk, int level,
 	case TCP_MULTIPATH_DEBUG:
 		val = tp->debug_on;
 		break;
-	case TCP_MULTIPATH_ENABLED:
+	case TCP_MULTIPATH_ENABLE:
 		val = (tp->mptcp_disabled == 0);
 		break;
 	case TCP_MULTIPATH_NDIFFPORTS:

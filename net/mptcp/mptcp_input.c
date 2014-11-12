@@ -382,32 +382,36 @@ static inline void mptcp_prepare_skb(struct sk_buff *skb, struct sk_buff *next,
 {
 	struct tcp_sock *tp = tcp_sk(sk);
 	struct tcp_skb_cb *tcb = TCP_SKB_CB(skb);
+	u32 inc = 0;
+
+	/* If skb is the end of this mapping (end is always at mapping-boundary
+	 * thanks to the splitting/trimming), then we need to increase
+	 * data-end-seq by 1 if this here is a data-fin.
+	 *
+	 * We need to do -1 because end_seq includes the subflow-FIN.
+	 */
+	if (tp->mptcp->map_data_fin &&
+	    (tcb->end_seq - (tcp_hdr(skb)->fin ? 1 : 0)) ==
+	    (tp->mptcp->map_subseq + tp->mptcp->map_data_len)) {
+		inc = 1;
+
+		/* We manually set the fin-flag if it is a data-fin. For easy
+		 * processing in tcp_recvmsg.
+		 */
+		tcp_hdr(skb)->fin = 1;
+	} else {
+		/* We may have a subflow-fin with data but without data-fin */
+		tcp_hdr(skb)->fin = 0;
+	}
+
 	/* Adapt data-seq's to the packet itself. We kinda transform the
 	 * dss-mapping to a per-packet granularity. This is necessary to
 	 * correctly handle overlapping mappings coming from different
 	 * subflows. Otherwise it would be a complete mess.
 	 */
 	tcb->seq = ((u32)tp->mptcp->map_data_seq) + tcb->seq - tp->mptcp->map_subseq;
-	tcb->end_seq = tcb->seq + skb->len;
+	tcb->end_seq = tcb->seq + skb->len + inc;
 
-	/* If cur is the last one in the rcv-queue (or the last one for this
-	 * mapping), and data_fin is enqueued, the end_data_seq is +1.
-	 */
-	if (skb_queue_is_last(&sk->sk_receive_queue, skb) ||
-	    after(TCP_SKB_CB(next)->end_seq, tp->mptcp->map_subseq + tp->mptcp->map_data_len)) {
-		tcb->end_seq += tp->mptcp->map_data_fin;
-
-		/* We manually set the fin-flag if it is a data-fin. For easy
-		 * processing in tcp_recvmsg.
-		 */
-		if (mptcp_is_data_fin2(skb, tp))
-			tcp_hdr(skb)->fin = 1;
-		else
-			tcp_hdr(skb)->fin = 0;
-	} else {
-		/* We may have a subflow-fin with data but without data-fin */
-		tcp_hdr(skb)->fin = 0;
-	}
 }
 
 /**
@@ -908,6 +912,7 @@ static int mptcp_queue_skb(struct sock *sk)
 				break;
 
 		}
+		tcp_enter_quickack_mode(sk);
 	} else {
 		/* Ready for the meta-rcv-queue */
 		skb_queue_walk_safe(&sk->sk_receive_queue, tmp1, tmp) {
@@ -1000,14 +1005,20 @@ void mptcp_data_ready(struct sock *sk, int bytes)
 	struct sk_buff *skb, *tmp;
 	int queued = 0;
 
-	/* If the meta is already closed, there is no point in pushing data */
-	if (meta_sk->sk_state == TCP_CLOSE && !tcp_sk(sk)->mpcb->in_time_wait) {
+	/* restart before the check, because mptcp_fin might have changed the
+	 * state.
+	 */
+restart:
+	/* If the meta cannot receive data, there is no point in pushing data.
+	 * If we are in time-wait, we may still be waiting for the final FIN.
+	 * So, we should proceed with the processing.
+	 */
+	if (!mptcp_sk_can_recv(meta_sk) && !tcp_sk(sk)->mpcb->in_time_wait) {
 		skb_queue_purge(&sk->sk_receive_queue);
 		tcp_sk(sk)->copied_seq = tcp_sk(sk)->rcv_nxt;
 		goto exit;
 	}
 
-restart:
 	/* Iterate over all segments, detect their mapping (if we don't have
 	 * one yet), validate them and push everything one level higher.
 	 */
@@ -2117,6 +2128,9 @@ int mptcp_rcv_synsent_state_process(struct sock *sk, struct sock **skptr,
 		tp->mptcp->snt_isn = tp->snd_nxt - 1;
 		tp->mpcb->dss_csum = mopt->dss_csum;
 		tp->mptcp->include_mpc = 1;
+
+		/* Ensure that fastopen is handled at the meta-level. */
+		tp->fastopen_req = NULL;
 
 		sk_set_socket(sk, mptcp_meta_sk(sk)->sk_socket);
 		sk->sk_wq = mptcp_meta_sk(sk)->sk_wq;

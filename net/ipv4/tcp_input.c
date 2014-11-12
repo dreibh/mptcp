@@ -165,7 +165,7 @@ static void tcp_incr_quickack(struct sock *sk)
 		icsk->icsk_ack.quick = min(quickacks, TCP_MAX_QUICKACKS);
 }
 
-static void tcp_enter_quickack_mode(struct sock *sk)
+void tcp_enter_quickack_mode(struct sock *sk)
 {
 	struct inet_connection_sock *icsk = inet_csk(sk);
 	tcp_incr_quickack(sk);
@@ -1319,7 +1319,11 @@ static struct sk_buff *tcp_shift_skb_data(struct sock *sk, struct sk_buff *skb,
 	int len;
 	int in_sack;
 
-	if (!sk_can_gso(sk))
+	/* For MPTCP we cannot shift skb-data and remove one skb from the
+	 * send-queue, because this will make us loose the DSS-option (which
+	 * is stored in TCP_SKB_CB(skb)->dss) of the skb we are removing.
+	 */
+	if (!sk_can_gso(sk) || tp->mpc)
 		goto fallback;
 
 	/* Normally R but no L won't result in plain S */
@@ -5581,10 +5585,11 @@ static int tcp_rcv_synsent_state_process(struct sock *sk, struct sk_buff *skb,
 			return -1;
 
 		/* With MPTCP we cannot send data on the third ack due to the
-		 * lack of option-space */
-		if ((sk->sk_write_pending && !tp->mpc) ||
+		 * lack of option-space to combine with an MP_CAPABLE.
+		 */
+		if (!tp->mpc && (sk->sk_write_pending ||
 		    icsk->icsk_accept_queue.rskq_defer_accept ||
-		    icsk->icsk_ack.pingpong) {
+		    icsk->icsk_ack.pingpong)) {
 			/* Save one ACK. Data will be ready after
 			 * several ticks, if write_pending is set.
 			 *

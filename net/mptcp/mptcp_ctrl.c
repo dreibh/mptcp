@@ -720,12 +720,11 @@ static void mptcp_mpcb_inherit_sockopts(struct sock *meta_sk, struct sock *maste
 		inet_csk_reset_keepalive_timer(master_sk, keepalive_time_when(meta_tp));
 	}
 
-	/****** DEFER_ACCEPT-handler ******/
-
-	/* DEFER_ACCEPT is not of concern for new subflows - we always accept
-	 * them
-	 */
+	/* DEFER_ACCEPT should not be set on the meta, as we want to accept new subflows directly */
 	inet_csk(meta_sk)->icsk_accept_queue.rskq_defer_accept = 0;
+
+	/* Do not propagate subflow-errors up to the MPTCP-layer */
+	inet_sk(master_sk)->recverr = 0;
 }
 
 static void mptcp_sub_inherit_sockopts(struct sock *meta_sk, struct sock *sub_sk)
@@ -749,6 +748,12 @@ static void mptcp_sub_inherit_sockopts(struct sock *meta_sk, struct sock *sub_sk
 
 	/* Inherit snd/rcv-buffer locks */
 	sub_sk->sk_userlocks = meta_sk->sk_userlocks & ~SOCK_BINDPORT_LOCK;
+
+	/* Nagle/Cork is forced off on the subflows. It is handled at the meta-layer */
+	tcp_sk(sub_sk)->nonagle = TCP_NAGLE_OFF|TCP_NAGLE_PUSH;
+
+	/* Do not propagate subflow-errors up to the MPTCP-layer */
+	inet_sk(sub_sk)->recverr = 0;
 }
 
 int mptcp_backlog_rcv(struct sock *meta_sk, struct sk_buff *skb)
@@ -1854,8 +1859,7 @@ err_alloc_mpcb:
 
 int mptcp_check_req_master(struct sock *sk, struct sock *child,
 			   struct request_sock *req,
-			   struct request_sock **prev,
-			   struct mptcp_options_received *mopt)
+			   struct request_sock **prev)
 {
 	struct tcp_sock *child_tp = tcp_sk(child);
 	struct sock *meta_sk = child;
@@ -2142,13 +2146,13 @@ static int mptcp_pm_seq_show(struct seq_file *seq, void *v)
 			if (meta_sk->sk_family == AF_INET ||
 			    mptcp_v6_is_v4_mapped(meta_sk)) {
 				seq_printf(seq, " 0 %08X:%04X                         %08X:%04X                        ",
-					   isk->inet_saddr,
+					   isk->inet_rcv_saddr,
 					   ntohs(isk->inet_sport),
 					   isk->inet_daddr,
 					   ntohs(isk->inet_dport));
 #if IS_ENABLED(CONFIG_IPV6)
 			} else if (meta_sk->sk_family == AF_INET6) {
-				struct in6_addr *src = &isk->pinet6->saddr;
+				struct in6_addr *src = &isk->pinet6->rcv_saddr;
 				struct in6_addr *dst = &isk->pinet6->daddr;
 				seq_printf(seq, " 1 %08X%08X%08X%08X:%04X %08X%08X%08X%08X:%04X",
 					   src->s6_addr32[0], src->s6_addr32[1],
@@ -2261,7 +2265,7 @@ void __init mptcp_init(void)
 	if (mptcp_register_path_manager(&mptcp_pm_default))
 		goto register_pm_failed;
 
-	pr_info("MPTCP: Stable release v0.88.11");
+	pr_info("MPTCP: Stable release v0.88.12");
 
 	mptcp_init_failed = false;
 

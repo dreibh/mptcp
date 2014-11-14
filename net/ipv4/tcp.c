@@ -2495,6 +2495,8 @@ static int tcp_repair_options_est(struct tcp_sock *tp,
 	return 0;
 }
 
+struct mptcp_pm_ops *mptcp_pm_find(const char *name);
+
 /*
  *	Socket option code for TCP.
  */
@@ -2525,6 +2527,30 @@ static int do_tcp_setsockopt(struct sock *sk, int level,
 		release_sock(sk);
 		return err;
 	}
+	case TCP_MULTIPATH_PATHMANAGER: {
+		char name[MPTCP_PM_NAME_MAX];
+
+		if (optlen < 1)
+			return -EINVAL;
+
+		val = strncpy_from_user(name, optval,
+					min_t(long, MPTCP_PM_NAME_MAX-1, optlen));
+		if (val < 0)
+			return -EFAULT;
+		name[val] = 0;
+
+		lock_sock(sk);
+		tp->mptcp_pm = mptcp_pm_find(name);
+		release_sock(sk);
+
+		if (!tp->mptcp_pm)
+			return -EFAULT;
+		return 0;
+	}
+	case TCP_MULTIPATH_ADD:
+	case TCP_MULTIPATH_REMOVE:
+		/* Implement Me! */
+		return -EOPNOTSUPP;
 	default:
 		/* fallthru */
 		break;
@@ -2774,6 +2800,7 @@ static int do_tcp_setsockopt(struct sock *sk, int level,
 		break;
 #ifdef CONFIG_MPTCP
 	case MPTCP_ENABLED:
+	case 10002:   /* !!! FIXME: compatibility to old patch !!! */
 		if (sk->sk_state == TCP_CLOSE || sk->sk_state == TCP_LISTEN) {
 			if (val)
 				tp->mptcp_enabled = 1;
@@ -2783,6 +2810,18 @@ static int do_tcp_setsockopt(struct sock *sk, int level,
 			err = -EPERM;
 		}
 		break;
+	case TCP_MULTIPATH_DEBUG:
+		if (val)
+			tp->debug_on = 1;
+		else
+			tp->debug_on = 0;
+		break;
+	case TCP_MULTIPATH_NDIFFPORTS:
+		if (val < 0)
+			err = -EINVAL;
+		else
+			tp->ndiffports = val;
+		break;		
 #endif
 	default:
 		err = -ENOPROTOOPT;
@@ -3009,7 +3048,27 @@ static int do_tcp_getsockopt(struct sock *sk, int level,
 		break;
 #endif
 	default:
-		return -ENOPROTOOPT;
+
+	case TCP_MULTIPATH_DEBUG:
+		val = tp->debug_on;
+		break;
+	case TCP_MULTIPATH_NDIFFPORTS:
+		val = tp->ndiffports;
+		break;
+	case TCP_MULTIPATH_SUBFLOWS:
+	case TCP_MULTIPATH_CONNID:
+		/* Implement Me! */
+		return -EOPNOTSUPP;
+
+	case TCP_MULTIPATH_PATHMANAGER:
+		if (get_user(len, optlen))
+			return -EFAULT;
+		len = min_t(unsigned int, len, MPTCP_PM_NAME_MAX);
+		if (put_user(len, optlen))
+			return -EFAULT;
+		if (copy_to_user(optval, tp->mptcp_pm->name, len))
+			return -EFAULT;
+		return 0;
 	}
 
 	if (put_user(len, optlen))

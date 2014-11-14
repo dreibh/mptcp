@@ -1202,7 +1202,7 @@ static int mptcp_alloc_mpcb(struct sock *meta_sk, __u64 remote_key, u32 window)
 	/* The meta is directly linked - set refcnt to 1 */
 	atomic_set(&mpcb->mpcb_refcnt, 1);
 
-	mptcp_init_path_manager(mpcb);
+	mptcp_init_path_manager(mpcb, meta_tp);
 	mptcp_init_scheduler(mpcb);
 
 	setup_timer(&mpcb->synack_timer, mptcp_synack_timer_handler,

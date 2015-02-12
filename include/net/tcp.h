@@ -573,6 +573,7 @@ const u8 *tcp_parse_md5sig_option(const struct tcphdr *th);
 
 void tcp_v4_send_check(struct sock *sk, struct sk_buff *skb);
 void tcp_v4_mtu_reduced(struct sock *sk);
+void tcp_v6_mtu_reduced(struct sock *sk);
 int tcp_v4_conn_request(struct sock *sk, struct sk_buff *skb);
 struct sock *tcp_create_openreq_child(struct sock *sk,
 				      struct request_sock *req,
@@ -1213,18 +1214,12 @@ static inline bool mptcp(const struct tcp_sock *tp)
 /* Note: caller must be prepared to deal with negative returns */ 
 static inline int tcp_space(const struct sock *sk)
 {
-	if (mptcp(tcp_sk(sk)))
-		sk = tcp_sk(sk)->meta_sk;
-
 	return tcp_win_from_space(sk->sk_rcvbuf -
 				  atomic_read(&sk->sk_rmem_alloc));
 } 
 
 static inline int tcp_full_space(const struct sock *sk)
 {
-	if (mptcp(tcp_sk(sk)))
-		sk = tcp_sk(sk)->meta_sk;
-
 	return tcp_win_from_space(sk->sk_rcvbuf); 
 }
 

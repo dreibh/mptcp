@@ -2496,6 +2496,7 @@ static int tcp_repair_options_est(struct tcp_sock *tp,
 }
 
 struct mptcp_pm_ops *mptcp_pm_find(const char *name);
+struct mptcp_sched_ops *mptcp_sched_find(const char *name);
 
 /*
  *	Socket option code for TCP.
@@ -2544,6 +2545,26 @@ static int do_tcp_setsockopt(struct sock *sk, int level,
 		release_sock(sk);
 
 		if (!tp->mptcp_pm)
+			return -EFAULT;
+		return 0;
+	}
+	case TCP_MULTIPATH_SCHEDULER: {
+		char name[MPTCP_SCHED_NAME_MAX];
+
+		if (optlen < 1)
+			return -EINVAL;
+
+		val = strncpy_from_user(name, optval,
+					min_t(long, MPTCP_SCHED_NAME_MAX-1, optlen));
+		if (val < 0)
+			return -EFAULT;
+		name[val] = 0;
+
+		lock_sock(sk);
+		tp->mptcp_sched = mptcp_sched_find(name);
+		release_sock(sk);
+
+		if (!tp->mptcp_sched)
 			return -EFAULT;
 		return 0;
 	}
@@ -3047,7 +3068,6 @@ static int do_tcp_getsockopt(struct sock *sk, int level,
 		val = tp->mptcp_enabled;
 		break;
 #endif
-	default:
 
 	case TCP_MULTIPATH_DEBUG:
 		val = tp->debug_on;
@@ -3060,15 +3080,33 @@ static int do_tcp_getsockopt(struct sock *sk, int level,
 		/* Implement Me! */
 		return -EOPNOTSUPP;
 
-	case TCP_MULTIPATH_PATHMANAGER:
-		if (get_user(len, optlen))
-			return -EFAULT;
-		len = min_t(unsigned int, len, MPTCP_PM_NAME_MAX);
-		if (put_user(len, optlen))
-			return -EFAULT;
-		if (copy_to_user(optval, tp->mptcp_pm->name, len))
-			return -EFAULT;
-		return 0;
+	case TCP_MULTIPATH_PATHMANAGER: {
+			if (get_user(len, optlen))
+				return -EFAULT;
+			len = min_t(unsigned int, len, MPTCP_PM_NAME_MAX);
+			if (put_user(len, optlen))
+				return -EFAULT;
+			if (copy_to_user(optval, tp->mptcp_pm->name, len))
+				return -EFAULT;
+			return 0;
+		}
+		break;
+
+	case TCP_MULTIPATH_SCHEDULER: {
+			if (get_user(len, optlen))
+				return -EFAULT;
+			len = min_t(unsigned int, len, MPTCP_SCHED_NAME_MAX);
+			if (put_user(len, optlen))
+				return -EFAULT;
+			if (copy_to_user(optval, tp->mptcp_sched->name, len))
+				return -EFAULT;
+			return 0;
+		}
+		break;
+
+	default:
+		return -ENOPROTOOPT;
+		break;
 	}
 
 	if (put_user(len, optlen))

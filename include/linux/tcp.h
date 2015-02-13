@@ -404,6 +404,7 @@ struct tcp_sock {
 	int		ndiffports;
 	int		debug_on;
 	struct mptcp_pm_ops *mptcp_pm;
+	struct mptcp_sched_ops *mptcp_sched;
 
 	/* Functions that depend on the value of the mpc flag */
 	u32 (*__select_window)(struct sock *sk);

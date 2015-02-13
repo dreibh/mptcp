@@ -122,6 +122,7 @@ enum {
 #define TCP_MULTIPATH_CONNID			10006	/* not yet implemented */
 #define TCP_MULTIPATH_NDIFFPORTS		10007	/* MPTCP NDIFFPORTS */
 #define TCP_MULTIPATH_PATHMANAGER	10008	/* MPTCP PATHMANAGER */
+#define TCP_MULTIPATH_SCHEDULER		10009	/* MPTCP SCHEDULER */
 
 struct tcp_repair_opt {
 	__u32	opt_code;

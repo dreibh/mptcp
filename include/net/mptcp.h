@@ -871,7 +871,7 @@ extern struct mptcp_pm_ops mptcp_pm_default;
 /* MPTCP-scheduler registration/initialization functions */
 int mptcp_register_scheduler(struct mptcp_sched_ops *sched);
 void mptcp_unregister_scheduler(struct mptcp_sched_ops *sched);
-void mptcp_init_scheduler(struct mptcp_cb *mpcb);
+void mptcp_init_scheduler(struct mptcp_cb *mpcb, struct tcp_sock *meta_tp);
 void mptcp_cleanup_scheduler(struct mptcp_cb *mpcb);
 void mptcp_get_default_scheduler(char *name);
 int mptcp_set_default_scheduler(const char *name);

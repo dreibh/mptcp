@@ -46,7 +46,7 @@ struct mptcp_pm_ops mptcp_pm_default = {
 	.owner = THIS_MODULE,
 };
 
-static struct mptcp_pm_ops *mptcp_pm_find(const char *name)
+struct mptcp_pm_ops *mptcp_pm_find(const char *name)
 {
 	struct mptcp_pm_ops *e;
 
@@ -127,9 +127,17 @@ int mptcp_set_default_path_manager(const char *name)
 	return ret;
 }
 
-void mptcp_init_path_manager(struct mptcp_cb *mpcb)
+void mptcp_init_path_manager(struct mptcp_cb *mpcb, struct tcp_sock *meta_tp)
 {
 	struct mptcp_pm_ops *pm;
+
+	if (meta_tp->mptcp_pm) {
+		pm = meta_tp->mptcp_pm;
+		if (try_module_get(pm->owner)) {
+			mpcb->pm_ops = pm;
+			return;
+		}
+	}
 
 	rcu_read_lock();
 	list_for_each_entry_rcu(pm, &mptcp_pm_list, list) {

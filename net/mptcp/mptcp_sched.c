@@ -460,7 +460,7 @@ struct mptcp_sched_ops mptcp_sched_default = {
 	.owner = THIS_MODULE,
 };
 
-static struct mptcp_sched_ops *mptcp_sched_find(const char *name)
+struct mptcp_sched_ops *mptcp_sched_find(const char *name)
 {
 	struct mptcp_sched_ops *e;
 
@@ -541,9 +541,17 @@ int mptcp_set_default_scheduler(const char *name)
 	return ret;
 }
 
-void mptcp_init_scheduler(struct mptcp_cb *mpcb)
+void mptcp_init_scheduler(struct mptcp_cb *mpcb, struct tcp_sock *meta_tp)
 {
 	struct mptcp_sched_ops *sched;
+
+	if (meta_tp->mptcp_sched) {
+		sched = meta_tp->mptcp_sched;
+		if (try_module_get(sched->owner)) {
+			mpcb->sched_ops = sched;
+			return;
+		}
+	}
 
 	rcu_read_lock();
 	list_for_each_entry_rcu(sched, &mptcp_sched_list, list) {

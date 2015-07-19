@@ -114,6 +114,16 @@ enum {
 #define TCP_NOTSENT_LOWAT	25	/* limit number of unsent bytes in write queue */
 #define MPTCP_ENABLED		26
 
+#define TCP_MULTIPATH_DEBUG			10001				/* MPTCP DEBUG on/off */
+#define TCP_MULTIPATH_ENABLE			MPTCP_ENABLED	/* MPTCP DISABLED on/off */
+#define TCP_MULTIPATH_ADD				10003	/* not yet implemented */
+#define TCP_MULTIPATH_REMOVE			10004	/* not yet implemented */
+#define TCP_MULTIPATH_SUBFLOWS		10005	/* not yet implemented */
+#define TCP_MULTIPATH_CONNID			10006	/* not yet implemented */
+#define TCP_MULTIPATH_NDIFFPORTS		10007	/* MPTCP NDIFFPORTS */
+#define TCP_MULTIPATH_PATHMANAGER	10008	/* MPTCP PATHMANAGER */
+#define TCP_MULTIPATH_SCHEDULER		10009	/* MPTCP SCHEDULER */
+
 struct tcp_repair_opt {
 	__u32	opt_code;
 	__u32	opt_val;

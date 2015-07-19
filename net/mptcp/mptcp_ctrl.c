@@ -330,6 +330,107 @@ static void mptcp_set_key_sk(struct sock *sk)
 		       &tp->mptcp_loc_token, NULL);
 }
 
+#ifdef HAVE_JUMP_LABEL
+/* We are not allowed to call static_key_slow_dec() from irq context
+ * If mptcp_enable/disable_static_key() is called from irq context,
+ * defer the static_key_slow_dec() calls.
+ */
+static atomic_t mptcp_enable_deferred;
+#endif
+
+void mptcp_enable_static_key(void)
+{
+#ifdef HAVE_JUMP_LABEL
+	int deferred;
+
+	if (in_interrupt()) {
+		atomic_inc(&mptcp_enable_deferred);
+		return;
+	}
+
+	deferred = atomic_xchg(&mptcp_enable_deferred, 0);
+
+	if (deferred > 0) {
+		while (deferred--)
+			static_key_slow_inc(&mptcp_static_key);
+	} else if (deferred < 0) {
+		/* Do exactly one dec less than necessary */
+		while (++deferred)
+			static_key_slow_dec(&mptcp_static_key);
+		return;
+	}
+#endif
+	static_key_slow_inc(&mptcp_static_key);
+	WARN_ON(atomic_read(&mptcp_static_key.enabled) == 0);
+}
+
+void mptcp_disable_static_key(void)
+{
+#ifdef HAVE_JUMP_LABEL
+	int deferred;
+
+	if (in_interrupt()) {
+		atomic_dec(&mptcp_enable_deferred);
+		return;
+	}
+
+	deferred = atomic_xchg(&mptcp_enable_deferred, 0);
+
+	if (deferred > 0) {
+		/* Do exactly one inc less than necessary */
+		while (--deferred)
+			static_key_slow_inc(&mptcp_static_key);
+		return;
+	} else if (deferred < 0) {
+		while (deferred++)
+			static_key_slow_dec(&mptcp_static_key);
+	}
+#endif
+	static_key_slow_dec(&mptcp_static_key);
+}
+
+void mptcp_enable_sock(struct sock *sk)
+{
+	if (!sock_flag(sk, SOCK_MPTCP)) {
+		sock_set_flag(sk, SOCK_MPTCP);
+
+		/* Necessary here, because MPTCP can be enabled/disabled through
+		 * a setsockopt.
+		 */
+		if (sk->sk_family == AF_INET)
+			inet_csk(sk)->icsk_af_ops = &mptcp_v4_specific;
+#if IS_ENABLED(CONFIG_IPV6)
+		else if (mptcp_v6_is_v4_mapped(sk))
+			inet_csk(sk)->icsk_af_ops = &mptcp_v6_mapped;
+		else
+			inet_csk(sk)->icsk_af_ops = &mptcp_v6_specific;
+#endif
+
+		mptcp_enable_static_key();
+	}
+}
+
+void mptcp_disable_sock(struct sock *sk)
+{
+	if (sock_flag(sk, SOCK_MPTCP)) {
+		sock_reset_flag(sk, SOCK_MPTCP);
+
+		/* Necessary here, because MPTCP can be enabled/disabled through
+		 * a setsockopt.
+		 */
+		if (sk->sk_family == AF_INET)
+			inet_csk(sk)->icsk_af_ops = &ipv4_specific;
+#if IS_ENABLED(CONFIG_IPV6)
+		else if (mptcp_v6_is_v4_mapped(sk))
+			inet_csk(sk)->icsk_af_ops = &ipv6_mapped;
+		else
+			inet_csk(sk)->icsk_af_ops = &ipv6_specific;
+#endif
+
+		mptcp_disable_static_key();
+	}
+}
+
 void mptcp_connect_init(struct sock *sk)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
@@ -505,8 +606,6 @@ static void mptcp_sock_destruct(struct sock *sk)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
 
-	inet_sock_destruct(sk);
-
 	BUG_ON(!list_empty(&tp->mptcp->cb_list));
 
 	kmem_cache_free(mptcp_sock_cache, tp->mptcp);
@@ -539,10 +638,9 @@ static void mptcp_sock_destruct(struct sock *sk)
 	}
 
 	WARN_ON(!static_key_false(&mptcp_static_key));
-	/* Must be the last call, because is_meta_sk() above still needs the
-	 * static key
-	 */
-	static_key_slow_dec(&mptcp_static_key);
+
+	/* Must be called here, because this will decrement the jump-label. */
+	inet_sock_destruct(sk);
 }
 
 void mptcp_destroy_sock(struct sock *sk)
@@ -922,6 +1020,7 @@ static int mptcp_inherit_sk(const struct sock *sk, struct sock *newsk,
 	tcp_sk(newsk)->mptcp = NULL;
 
 	sock_reset_flag(newsk, SOCK_DONE);
+	sock_reset_flag(newsk, SOCK_MPTCP);
 	skb_queue_head_init(&newsk->sk_error_queue);
 
 	filter = rcu_dereference_protected(newsk->sk_filter, 1);
@@ -1161,6 +1260,11 @@ static int mptcp_alloc_mpcb(struct sock *meta_sk, __u64 remote_key, u32 window)
 		return -ENOMEM;
 	}
 
+	if (!sock_flag(meta_sk, SOCK_MPTCP)) {
+		mptcp_enable_static_key();
+		sock_set_flag(meta_sk, SOCK_MPTCP);
+	}
+
 	/* Redefine function-pointers as the meta-sk is now fully ready */
 	set_mpc(meta_tp);
 	set_meta_funcs(meta_tp);
@@ -1282,6 +1386,12 @@ int mptcp_add_sock(struct sock *meta_sk, struct sock *sk, u8 loc_id, u8 rem_id,
 	tp->mpcb = mpcb;
 	tp->meta_sk = meta_sk;
 	set_mpc(tp);
+
+	if (!sock_flag(sk, SOCK_MPTCP)) {
+		mptcp_enable_static_key();
+		sock_set_flag(sk, SOCK_MPTCP);
+	}
+
 	tp->mptcp->loc_id = loc_id;
 	tp->mptcp->rem_id = rem_id;
 	if (mpcb->sched_ops->init)
@@ -1381,17 +1491,13 @@ void mptcp_del_sock(struct sock *sk)
 	rcu_assign_pointer(inet_sk(sk)->inet_opt, NULL);
 }
 
-/* Updates the metasocket ULID/port data, based on the given sock.
- * The argument sock must be the sock accessible to the application.
- * In this function, we update the meta socket info, based on the changes
- * in the application socket (bind, address allocation, ...)
+/* Updates the MPTCP-session based on path-manager information (e.g., addresses,
+ * low-prio flows,...).
  */
 void mptcp_update_metasocket(struct sock *sk, struct sock *meta_sk)
 {
 	if (tcp_sk(sk)->mpcb->pm_ops->new_session)
 		tcp_sk(sk)->mpcb->pm_ops->new_session(meta_sk);
-
-	tcp_sk(sk)->mptcp->send_mp_prio = tcp_sk(sk)->mptcp->low_prio;
 }
 
 /* Clean up the receive buffer for full frames taken by the user,
@@ -1860,17 +1966,6 @@ void mptcp_disconnect(struct sock *sk)
 /* Returns 1 if we should enable MPTCP for that socket. */
 int mptcp_doit(struct sock *sk)
 {
-	/* Do not allow MPTCP enabling if the MPTCP initialization failed */
-	if (mptcp_init_failed)
-		return 0;
-
-	if (sysctl_mptcp_enabled == MPTCP_APP && !tcp_sk(sk)->mptcp_enabled)
-		return 0;
-
-	/* Socket may already be established (e.g., called from tcp_recvmsg) */
-	if (mptcp(tcp_sk(sk)) || tcp_sk(sk)->request_mptcp)
-		return 1;
-
 	/* Don't do mptcp over loopback */
 	if (sk->sk_family == AF_INET &&
 	    (ipv4_is_loopback(inet_sk(sk)->inet_daddr) ||
@@ -2268,7 +2363,6 @@ void mptcp_reqsk_init(struct request_sock *req, struct sk_buff *skb)
 int mptcp_conn_request(struct sock *sk, struct sk_buff *skb)
 {
 	struct mptcp_options_received mopt;
-	struct tcp_sock *tp = tcp_sk(sk);
 	__u32 isn = TCP_SKB_CB(skb)->when;
 	bool want_cookie = false;
 
@@ -2288,7 +2382,7 @@ int mptcp_conn_request(struct sock *sk, struct sk_buff *skb)
 	if (mopt.drop_me)
 		goto drop;
 
-	if (sysctl_mptcp_enabled == MPTCP_APP && !tp->mptcp_enabled)
+	if (!sock_flag(sk, SOCK_MPTCP))
 		mopt.saw_mpc = 0;
 
 	if (skb->protocol == htons(ETH_P_IP)) {
@@ -2476,7 +2570,7 @@ void __init mptcp_init(void)
 	if (mptcp_register_scheduler(&mptcp_sched_default))
 		goto register_sched_failed;
 
-	pr_info("MPTCP: Stable release v0.89.4");
+	pr_info("MPTCP: Stable release v0.89.5");
 
 	mptcp_init_failed = false;
 

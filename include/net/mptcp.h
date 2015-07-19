@@ -438,15 +438,6 @@ static void reset_meta_funcs(struct tcp_sock *tp)
 	tp->cleanup_rbuf	= tcp_cleanup_rbuf;
 }
 
-/* Initializes MPTCP flags in tcp_sock (and other tcp_sock members that depend
- * on those flags).
- */
-static inline void mptcp_init_tcp_sock(struct tcp_sock *tp)
-{
-	reset_mpc(tp);
-	reset_meta_funcs(tp);
-}
-
 #ifdef CONFIG_MPTCP
 
 /* Used for checking if the mptcp initialization has been successful */
@@ -669,7 +660,7 @@ static inline int mptcp_sub_len_dss(struct mp_dss *m, int csum)
 	return 4 + m->A * (4 + m->a * 4) + m->M * (10 + m->m * 4 + csum * 2);
 }
 
-#define MPTCP_APP	2
+#define MPTCP_SYSCTL	1
 
 extern int sysctl_mptcp_enabled;
 extern int sysctl_mptcp_checksum;
@@ -857,6 +848,10 @@ void mptcp_join_reqsk_init(struct mptcp_cb *mpcb, struct request_sock *req,
 void mptcp_reqsk_init(struct request_sock *req, struct sk_buff *skb);
 int mptcp_conn_request(struct sock *sk, struct sk_buff *skb);
 void mptcp_init_congestion_control(struct sock *sk);
+void mptcp_enable_sock(struct sock *sk);
+void mptcp_disable_sock(struct sock *sk);
+void mptcp_enable_static_key(void);
+void mptcp_disable_static_key(void);
 
 /* MPTCP-path-manager registration/initialization functions */
 int mptcp_register_path_manager(struct mptcp_pm_ops *pm);
@@ -877,6 +872,18 @@ void mptcp_get_default_scheduler(char *name);
 int mptcp_set_default_scheduler(const char *name);
 extern struct mptcp_sched_ops mptcp_sched_default;
 
+/* Initializes function-pointers and MPTCP-flags */
+static inline void mptcp_init_tcp_sock(struct sock *sk)
+{
+	struct tcp_sock *tp = tcp_sk(sk);
+
+	reset_mpc(tp);
+	reset_meta_funcs(tp);
+
+	if (!mptcp_init_failed && sysctl_mptcp_enabled == MPTCP_SYSCTL)
+		mptcp_enable_sock(sk);
+}
+
 static inline void mptcp_reset_synack_timer(struct sock *meta_sk,
 					    unsigned long len)
 {
@@ -887,17 +894,6 @@ static inline void mptcp_reset_synack_timer(struct sock *meta_sk,
 static inline void mptcp_delete_synack_timer(struct sock *meta_sk)
 {
 	sk_stop_timer(meta_sk, &tcp_sk(meta_sk)->mpcb->synack_timer);
-}
-
-static inline bool is_mptcp_enabled(const struct sock *sk)
-{
-	if (!sysctl_mptcp_enabled || mptcp_init_failed)
-		return false;
-
-	if (sysctl_mptcp_enabled == MPTCP_APP && !tcp_sk(sk)->mptcp_enabled)
-		return false;
-
-	return true;
 }
 
 static inline int mptcp_pi_to_flag(int pi)
@@ -953,6 +949,17 @@ static inline void mptcp_send_reset(struct sock *sk)
 {
 	tcp_sk(sk)->send_active_reset(sk, GFP_ATOMIC);
 	mptcp_sub_force_close(sk);
+}
+
+static inline void mptcp_sub_force_close_all(struct mptcp_cb *mpcb,
+					     struct sock *except)
+{
+	struct sock *sk_it, *tmp;
+
+	mptcp_for_each_sk_safe(mpcb, sk_it, tmp) {
+		if (sk_it != except)
+			mptcp_sub_force_close(sk_it);
+	}
 }
 
 static inline bool mptcp_is_data_seq(const struct sk_buff *skb)
@@ -1257,6 +1264,8 @@ static inline bool mptcp_fallback_infinite(struct sock *sk, int flag)
 	tp->mpcb->infinite_mapping_rcv = 1;
 	tp->mptcp->fully_established = 1;
 
+	mptcp_sub_force_close_all(tp->mpcb, sk);
+
 	return false;
 }
 
@@ -1334,7 +1343,6 @@ bool mptcp_prune_ofo_queue(struct sock *sk);
 
 static inline void set_mpc(struct tcp_sock *tp)
 {
-	static_key_slow_inc(&mptcp_static_key);
 	tp->mpc	= 1;
 
 	tp->__select_window		= __mptcp_select_window;
@@ -1528,6 +1536,8 @@ static inline void mptcp_reqsk_new_mptcp(struct request_sock *req,
 static inline void mptcp_remove_shortcuts(const struct mptcp_cb *mpcb,
 					  const struct sk_buff *skb) {}
 static inline void mptcp_delete_synack_timer(struct sock *meta_sk) {}
+static inline void mptcp_init_tcp_sock(struct sock *sk) {}
+static inline void mptcp_disable_static_key(void) {}
 #endif /* CONFIG_MPTCP */
 
 #endif /* _MPTCP_H */

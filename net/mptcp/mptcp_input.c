@@ -352,6 +352,7 @@ static int mptcp_verif_dss_csum(struct sock *sk)
 		       __func__, csum_fold(csum_tcp), TCP_SKB_CB(last)->seq,
 		       dss_csum_added, overflowed, iter);
 
+		MPTCP_INC_STATS(sock_net(sk), MPTCP_MIB_CSUMFAIL);
 		tp->mptcp->send_mp_fail = 1;
 
 		/* map_data_seq is the data-seq number of the
@@ -439,13 +440,19 @@ static inline int mptcp_direct_copy(const struct sk_buff *skb,
 	return eaten;
 }
 
-static inline void mptcp_reset_mapping(struct tcp_sock *tp)
+static inline void mptcp_reset_mapping(struct tcp_sock *tp, u32 old_copied_seq)
 {
 	tp->mptcp->map_data_len = 0;
 	tp->mptcp->map_data_seq = 0;
 	tp->mptcp->map_subseq = 0;
 	tp->mptcp->map_data_fin = 0;
 	tp->mptcp->mapping_present = 0;
+
+	/* In infinite mapping receiver mode, we have to advance the implied
+	 * data-sequence number when we progress the subflow's data.
+	 */
+	if (tp->mpcb->infinite_mapping_rcv)
+		tp->mpcb->infinite_rcv_seq += (tp->copied_seq - old_copied_seq);
 }
 
 /* The DSS-mapping received on the sk only covers the second half of the skb
@@ -525,10 +532,11 @@ static int mptcp_skb_split_tail(struct sk_buff *skb, struct sock *sk, u32 seq)
 static int mptcp_prevalidate_skb(struct sock *sk, struct sk_buff *skb)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
+	struct mptcp_cb *mpcb = tp->mpcb;
 
 	/* If we are in infinite mode, the subflow-fin is in fact a data-fin. */
 	if (!skb->len && (TCP_SKB_CB(skb)->tcp_flags & TCPHDR_FIN) &&
-	    !mptcp_is_data_fin(skb) && !tp->mpcb->infinite_mapping_rcv) {
+	    !mptcp_is_data_fin(skb) && !mpcb->infinite_mapping_rcv) {
 		/* Remove a pure subflow-fin from the queue and increase
 		 * copied_seq.
 		 */
@@ -542,24 +550,28 @@ static int mptcp_prevalidate_skb(struct sock *sk, struct sk_buff *skb)
 	 * this segment, this path has to fallback to infinite or be torn down.
 	 */
 	if (!tp->mptcp->fully_established && !mptcp_is_data_seq(skb) &&
-	    !tp->mptcp->mapping_present && !tp->mpcb->infinite_mapping_rcv) {
+	    !tp->mptcp->mapping_present && !mpcb->infinite_mapping_rcv) {
 		pr_err("%s %#x will fallback - pi %d from %pS, seq %u\n",
-		       __func__, tp->mpcb->mptcp_loc_token,
+		       __func__, mpcb->mptcp_loc_token,
 		       tp->mptcp->path_index, __builtin_return_address(0),
 		       TCP_SKB_CB(skb)->seq);
 
 		if (!is_master_tp(tp)) {
+			MPTCP_INC_STATS(sock_net(sk), MPTCP_MIB_FBDATASUB);
 			mptcp_send_reset(sk);
 			return 1;
 		}
 
-		tp->mpcb->infinite_mapping_snd = 1;
-		tp->mpcb->infinite_mapping_rcv = 1;
+		MPTCP_INC_STATS(sock_net(sk), MPTCP_MIB_FBDATAINIT);
 
-		mptcp_sub_force_close_all(tp->mpcb, sk);
+		mpcb->infinite_mapping_snd = 1;
+		mpcb->infinite_mapping_rcv = 1;
+		mpcb->infinite_rcv_seq = mptcp_get_rcv_nxt_64(mptcp_meta_tp(tp));
+
+		mptcp_sub_force_close_all(mpcb, sk);
 
 		/* We do a seamless fallback and should not send a inf.mapping. */
-		tp->mpcb->send_infinite_mapping = 0;
+		mpcb->send_infinite_mapping = 0;
 		tp->mptcp->fully_established = 1;
 	}
 
@@ -587,13 +599,14 @@ static int mptcp_detect_mapping(struct sock *sk, struct sk_buff *skb)
 	struct tcp_skb_cb *tcb = TCP_SKB_CB(skb);
 	u32 *ptr;
 	u32 data_seq, sub_seq, data_len, tcp_end_seq;
+	bool set_infinite_rcv = false;
 
 	/* If we are in infinite-mapping-mode, the subflow is guaranteed to be
 	 * in-order at the data-level. Thus data-seq-numbers can be inferred
 	 * from what is expected at the data-level.
 	 */
 	if (mpcb->infinite_mapping_rcv) {
-		tp->mptcp->map_data_seq = mptcp_get_rcv_nxt_64(meta_tp);
+		tp->mptcp->map_data_seq = mpcb->infinite_rcv_seq;
 		tp->mptcp->map_subseq = tcb->seq;
 		tp->mptcp->map_data_len = skb->len;
 		tp->mptcp->map_data_fin = !!(TCP_SKB_CB(skb)->tcp_flags & TCPHDR_FIN);
@@ -606,6 +619,7 @@ static int mptcp_detect_mapping(struct sock *sk, struct sk_buff *skb)
 		/* Too many packets without a mapping - this subflow is broken */
 		if (!tp->mptcp->mapping_present &&
 		    tp->rcv_nxt - tp->copied_seq > 65536) {
+			MPTCP_INC_STATS(sock_net(sk), MPTCP_MIB_NODSSWINDOW);
 			mptcp_send_reset(sk);
 			return 1;
 		}
@@ -642,6 +656,7 @@ static int mptcp_detect_mapping(struct sock *sk, struct sk_buff *skb)
 		       sub_seq, tp->mptcp->map_subseq, data_len,
 		       tp->mptcp->map_data_len, mptcp_is_data_fin(skb),
 		       tp->mptcp->map_data_fin);
+		MPTCP_INC_STATS(sock_net(sk), MPTCP_MIB_DSSNOMATCH);
 		mptcp_send_reset(sk);
 		return 1;
 	}
@@ -674,6 +689,9 @@ static int mptcp_detect_mapping(struct sock *sk, struct sk_buff *skb)
 		 * the data and subflow-level
 		 */
 		mptcp_purge_ofo_queue(meta_tp);
+
+		set_infinite_rcv = true;
+		MPTCP_INC_STATS(sock_net(sk), MPTCP_MIB_INFINITEMAPRX);
 	}
 
 	/* We are sending mp-fail's and thus are in fallback mode.
@@ -732,6 +750,7 @@ static int mptcp_detect_mapping(struct sock *sk, struct sk_buff *skb)
 		       "end_seq %u, tcp_end_seq %u seq %u dfin %u len %u data_len %u"
 		       "copied_seq %u\n", __func__, sub_seq, tcb->end_seq, tcp_end_seq, tcb->seq, mptcp_is_data_fin(skb),
 		       skb->len, data_len, tp->copied_seq);
+		MPTCP_INC_STATS(sock_net(sk), MPTCP_MIB_DSSTCPMISMATCH);
 		mptcp_send_reset(sk);
 		return 1;
 	}
@@ -756,6 +775,9 @@ static int mptcp_detect_mapping(struct sock *sk, struct sk_buff *skb)
 			tp->mptcp->map_data_seq += 0xFFFFFFFF;
 		}
 	}
+
+	if (set_infinite_rcv)
+		mpcb->infinite_rcv_seq = tp->mptcp->map_data_seq;
 
 	tp->mptcp->map_data_len = data_len;
 	tp->mptcp->map_subseq = sub_seq;
@@ -802,8 +824,10 @@ static int mptcp_validate_mapping(struct sock *sk, struct sk_buff *skb)
 	 */
 	tmp = skb_peek(&sk->sk_receive_queue);
 	if (before(TCP_SKB_CB(tmp)->seq, tp->mptcp->map_subseq) &&
-	    after(TCP_SKB_CB(tmp)->end_seq, tp->mptcp->map_subseq))
+	    after(TCP_SKB_CB(tmp)->end_seq, tp->mptcp->map_subseq)) {
+		MPTCP_INC_STATS(sock_net(sk), MPTCP_MIB_DSSTRIMHEAD);
 		mptcp_skb_trim_head(tmp, sk, tp->mptcp->map_subseq);
+	}
 
 	/* ... or the new skb (tail) has to be split at the end. */
 	tcp_end_seq = TCP_SKB_CB(skb)->end_seq;
@@ -811,6 +835,7 @@ static int mptcp_validate_mapping(struct sock *sk, struct sk_buff *skb)
 		tcp_end_seq--;
 	if (after(tcp_end_seq, tp->mptcp->map_subseq + tp->mptcp->map_data_len)) {
 		u32 seq = tp->mptcp->map_subseq + tp->mptcp->map_data_len;
+		MPTCP_INC_STATS(sock_net(sk), MPTCP_MIB_DSSSPLITTAIL);
 		if (mptcp_skb_split_tail(skb, sk, seq)) { /* Allocation failed */
 			/* TODO : maybe handle this here better.
 			 * We now just force meta-retransmission.
@@ -834,6 +859,7 @@ static int mptcp_validate_mapping(struct sock *sk, struct sk_buff *skb)
 			tp->copied_seq = TCP_SKB_CB(tmp1)->end_seq;
 			__skb_unlink(tmp1, &sk->sk_receive_queue);
 
+			MPTCP_INC_STATS(sock_net(sk), MPTCP_MIB_PURGEOLD);
 			/* Impossible that we could free skb here, because his
 			 * mapping is known to be valid from previous checks
 			 */
@@ -856,6 +882,7 @@ static int mptcp_queue_skb(struct sock *sk)
 	struct mptcp_cb *mpcb = tp->mpcb;
 	struct sk_buff *tmp, *tmp1;
 	u64 rcv_nxt64 = mptcp_get_rcv_nxt_64(meta_tp);
+	u32 old_copied_seq = tp->copied_seq;
 	bool data_queued = false;
 
 	/* Have we not yet received the full mapping? */
@@ -881,7 +908,7 @@ static int mptcp_queue_skb(struct sock *sk)
 				break;
 		}
 
-		mptcp_reset_mapping(tp);
+		mptcp_reset_mapping(tp, old_copied_seq);
 
 		return -1;
 	}
@@ -897,7 +924,7 @@ static int mptcp_queue_skb(struct sock *sk)
 		int ret = mptcp_verif_dss_csum(sk);
 
 		if (ret <= 0) {
-			mptcp_reset_mapping(tp);
+			mptcp_reset_mapping(tp, old_copied_seq);
 			return 1;
 		}
 	}
@@ -928,7 +955,6 @@ static int mptcp_queue_skb(struct sock *sk)
 		/* Ready for the meta-rcv-queue */
 		skb_queue_walk_safe(&sk->sk_receive_queue, tmp1, tmp) {
 			int eaten = 0;
-			const bool copied_early = false;
 			bool fragstolen = false;
 			u32 old_rcv_nxt = meta_tp->rcv_nxt;
 
@@ -946,24 +972,11 @@ static int mptcp_queue_skb(struct sock *sk)
 				goto next;
 			}
 
-#ifdef CONFIG_NET_DMA
-			if (TCP_SKB_CB(tmp1)->seq == meta_tp->rcv_nxt  &&
-			    meta_tp->ucopy.task == current &&
-			    meta_tp->copied_seq == meta_tp->rcv_nxt &&
-			    tmp1->len <= meta_tp->ucopy.len &&
-			    sock_owned_by_user(meta_sk) &&
-			    tcp_dma_try_early_copy(meta_sk, tmp1, 0)) {
-				copied_early = true;
-				eaten = 1;
-			}
-#endif
-
 			/* Is direct copy possible ? */
 			if (TCP_SKB_CB(tmp1)->seq == meta_tp->rcv_nxt &&
 			    meta_tp->ucopy.task == current &&
 			    meta_tp->copied_seq == meta_tp->rcv_nxt &&
-			    meta_tp->ucopy.len && sock_owned_by_user(meta_sk) &&
-			    !copied_early)
+			    meta_tp->ucopy.len && sock_owned_by_user(meta_sk))
 				eaten = mptcp_direct_copy(tmp1, meta_sk);
 
 			if (mpcb->in_time_wait) /* In time-wait, do not receive data */
@@ -975,11 +988,6 @@ static int mptcp_queue_skb(struct sock *sk)
 			meta_tp->rcv_nxt = TCP_SKB_CB(tmp1)->end_seq;
 			mptcp_check_rcvseq_wrap(meta_tp, old_rcv_nxt);
 
-#ifdef CONFIG_NET_DMA
-			if (copied_early)
-				meta_tp->cleanup_rbuf(meta_sk, tmp1->len);
-#endif
-
 			if ((TCP_SKB_CB(tmp1)->tcp_flags & TCPHDR_FIN) &&
 			    !mpcb->in_time_wait)
 				mptcp_fin(meta_sk);
@@ -988,12 +996,6 @@ static int mptcp_queue_skb(struct sock *sk)
 			if (!skb_queue_empty(&meta_tp->out_of_order_queue))
 				mptcp_ofo_queue(meta_sk);
 
-#ifdef CONFIG_NET_DMA
-			if (copied_early)
-				__skb_queue_tail(&meta_sk->sk_async_wait_queue,
-						 tmp1);
-			else
-#endif
 			if (eaten)
 				kfree_skb_partial(tmp1, fragstolen);
 
@@ -1007,7 +1009,7 @@ next:
 	}
 
 	inet_csk(meta_sk)->icsk_ack.lrcvtime = tcp_time_stamp;
-	mptcp_reset_mapping(tp);
+	mptcp_reset_mapping(tp, old_copied_seq);
 
 	return data_queued ? -1 : -2;
 }
@@ -1177,6 +1179,7 @@ int mptcp_lookup_join(struct sk_buff *skb, struct inet_timewait_sock *tw)
 	token = join_opt->u.syn.token;
 	meta_sk = mptcp_hash_find(dev_net(skb_dst(skb)->dev), token);
 	if (!meta_sk) {
+		MPTCP_INC_STATS(dev_net(skb_dst(skb)->dev), MPTCP_MIB_JOINNOTOKEN);
 		mptcp_debug("%s:mpcb not found:%x\n", __func__, token);
 		return -1;
 	}
@@ -1200,6 +1203,7 @@ int mptcp_lookup_join(struct sk_buff *skb, struct inet_timewait_sock *tw)
 		 * no new subflows!
 		 */
 		sock_put(meta_sk); /* Taken by mptcp_hash_find */
+		MPTCP_INC_STATS(sock_net(meta_sk), MPTCP_MIB_JOINFALLBACK);
 		return -1;
 	}
 
@@ -1251,6 +1255,7 @@ int mptcp_do_join_short(struct sk_buff *skb,
 	token = mopt->mptcp_rem_token;
 	meta_sk = mptcp_hash_find(net, token);
 	if (!meta_sk) {
+		MPTCP_INC_STATS(dev_net(skb_dst(skb)->dev), MPTCP_MIB_JOINNOTOKEN);
 		mptcp_debug("%s:mpcb not found:%x\n", __func__, token);
 		return -1;
 	}
@@ -1285,6 +1290,7 @@ int mptcp_do_join_short(struct sk_buff *skb,
 	if (tcp_sk(meta_sk)->mpcb->infinite_mapping_rcv ||
 	    tcp_sk(meta_sk)->mpcb->send_infinite_mapping ||
 	    meta_sk->sk_state == TCP_CLOSE || !tcp_sk(meta_sk)->inside_tk_table) {
+		MPTCP_INC_STATS(sock_net(meta_sk), MPTCP_MIB_JOINFALLBACK);
 		bh_unlock_sock(meta_sk);
 		sock_put(meta_sk); /* Taken by mptcp_hash_find */
 		return -1;
@@ -1914,6 +1920,8 @@ static void mptcp_handle_add_addr(const unsigned char *ptr, struct sock *sk)
 
 	if (mpcb->pm_ops->add_raddr)
 		mpcb->pm_ops->add_raddr(mpcb, &addr, family, port, mpadd->addr_id);
+
+	MPTCP_INC_STATS(sock_net(sk), MPTCP_MIB_ADDADDRRX);
 }
 
 static void mptcp_handle_rem_addr(const unsigned char *ptr, struct sock *sk)
@@ -1929,7 +1937,11 @@ static void mptcp_handle_rem_addr(const unsigned char *ptr, struct sock *sk)
 		if (mpcb->pm_ops->rem_raddr)
 			mpcb->pm_ops->rem_raddr(mpcb, rem_id);
 		mptcp_send_reset_rem_id(mpcb, rem_id);
+
+		MPTCP_INC_STATS(sock_net(sk), MPTCP_MIB_REMADDRSUB);
 	}
+
+	MPTCP_INC_STATS(sock_net(sk), MPTCP_MIB_REMADDRRX);
 }
 
 static void mptcp_parse_addropt(const struct sk_buff *skb, struct sock *sk)
@@ -1994,6 +2006,7 @@ static inline int mptcp_mp_fail_rcvd(struct sock *sk, const struct tcphdr *th)
 	struct mptcp_cb *mpcb = tcp_sk(sk)->mpcb;
 
 	if (unlikely(mptcp->rx_opt.mp_fail)) {
+		MPTCP_INC_STATS(sock_net(sk), MPTCP_MIB_MPFAILRX);
 		mptcp->rx_opt.mp_fail = 0;
 
 		if (!th->rst && !mpcb->infinite_mapping_snd) {
@@ -2026,6 +2039,7 @@ static inline int mptcp_mp_fail_rcvd(struct sock *sk, const struct tcphdr *th)
 	}
 
 	if (unlikely(mptcp->rx_opt.mp_fclose)) {
+		MPTCP_INC_STATS(sock_net(sk), MPTCP_MIB_FASTCLOSERX);
 		mptcp->rx_opt.mp_fclose = 0;
 		if (mptcp->rx_opt.mptcp_sender_key != mpcb->mptcp_loc_key)
 			return 0;
@@ -2211,6 +2225,7 @@ int mptcp_rcv_synsent_state_process(struct sock *sk, struct sock **skptr,
 				(u32 *)hash_mac_check);
 		if (memcmp(hash_mac_check,
 			   (char *)&tp->mptcp->rx_opt.mptcp_recv_tmac, 8)) {
+			MPTCP_INC_STATS(sock_net(sk), MPTCP_MIB_JOINSYNACKMAC);
 			mptcp_sub_force_close(sk);
 			return 1;
 		}
@@ -2227,9 +2242,11 @@ int mptcp_rcv_synsent_state_process(struct sock *sk, struct sock **skptr,
 				(u8 *)&tp->mptcp->rx_opt.mptcp_recv_nonce,
 				(u32 *)&tp->mptcp->sender_mac[0]);
 
+		MPTCP_INC_STATS(sock_net(sk), MPTCP_MIB_JOINSYNACKRX);
 	} else if (mopt->saw_mpc) {
 		struct sock *meta_sk = sk;
 
+		MPTCP_INC_STATS(sock_net(sk), MPTCP_MIB_MPCAPABLEACTIVEACK);
 		if (mptcp_create_master_sk(sk, mopt->mptcp_sender_key,
 					   ntohs(tcp_hdr(skb)->window)))
 			return 2;
@@ -2255,6 +2272,9 @@ int mptcp_rcv_synsent_state_process(struct sock *sk, struct sock **skptr,
 		 */
 		tp->mptcp->snt_isn = tp->snd_una - 1;
 		tp->mpcb->dss_csum = mopt->dss_csum;
+		if (tp->mpcb->dss_csum)
+			MPTCP_INC_STATS(sock_net(sk), MPTCP_MIB_CSUMENABLED);
+
 		tp->mptcp->include_mpc = 1;
 
 		/* Ensure that fastopen is handled at the meta-level. */
@@ -2266,6 +2286,8 @@ int mptcp_rcv_synsent_state_process(struct sock *sk, struct sock **skptr,
 		 /* hold in sk_clone_lock due to initialization to 2 */
 		sock_put(sk);
 	} else {
+		MPTCP_INC_STATS(sock_net(sk), MPTCP_MIB_MPCAPABLEACTIVEFALLBACK);
+
 		tp->request_mptcp = 0;
 
 		if (tp->inside_tk_table)

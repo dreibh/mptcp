@@ -1203,8 +1203,8 @@ static int mptcp_alloc_mpcb(struct sock *meta_sk, __u64 remote_key,
 	/* The meta is directly linked - set refcnt to 1 */
 	atomic_set(&mpcb->mpcb_refcnt, 1);
 
-	mptcp_init_path_manager(mpcb);
-	mptcp_init_scheduler(mpcb);
+	mptcp_init_path_manager(mpcb, meta_tp);
+	mptcp_init_scheduler(mpcb, meta_tp);
 
 	if (!try_module_get(inet_csk(master_sk)->icsk_ca_ops->owner))
 		tcp_assign_congestion_control(master_sk);

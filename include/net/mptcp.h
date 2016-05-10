@@ -665,6 +665,16 @@ extern int sysctl_mptcp_syn_retries;
 
 extern struct workqueue_struct *mptcp_wq;
 
+/* sfo */
+#define mptcp_debug2(mpcb, fmt, args...)				\
+	do {								\
+		struct sock *meta_sk = mpcb ? mpcb->meta_sk : NULL;	\
+		struct tcp_sock *meta_tp = tcp_sk(meta_sk);		\
+		u8 debug_on = meta_tp ? meta_tp->debug_on : 0;		\
+		if (unlikely(sysctl_mptcp_debug || debug_on)) 		\
+			pr_err(__FILE__ ": " fmt, ##args);	\
+	} while (0)
+
 #define mptcp_debug(fmt, args...)					\
 	do {								\
 		if (unlikely(sysctl_mptcp_debug))			\
@@ -898,7 +908,7 @@ void mptcp_sock_destruct(struct sock *sk);
 /* MPTCP-path-manager registration/initialization functions */
 int mptcp_register_path_manager(struct mptcp_pm_ops *pm);
 void mptcp_unregister_path_manager(struct mptcp_pm_ops *pm);
-void mptcp_init_path_manager(struct mptcp_cb *mpcb);
+void mptcp_init_path_manager(struct mptcp_cb *mpcb, struct tcp_sock *meta_tp);
 void mptcp_cleanup_path_manager(struct mptcp_cb *mpcb);
 void mptcp_fallback_default(struct mptcp_cb *mpcb);
 void mptcp_get_default_path_manager(char *name);
@@ -908,7 +918,7 @@ extern struct mptcp_pm_ops mptcp_pm_default;
 /* MPTCP-scheduler registration/initialization functions */
 int mptcp_register_scheduler(struct mptcp_sched_ops *sched);
 void mptcp_unregister_scheduler(struct mptcp_sched_ops *sched);
-void mptcp_init_scheduler(struct mptcp_cb *mpcb);
+void mptcp_init_scheduler(struct mptcp_cb *mpcb, struct tcp_sock *meta_tp);
 void mptcp_cleanup_scheduler(struct mptcp_cb *mpcb);
 void mptcp_get_default_scheduler(char *name);
 int mptcp_set_default_scheduler(const char *name);

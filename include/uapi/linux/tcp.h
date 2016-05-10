@@ -115,6 +115,16 @@ enum {
 #define TCP_CC_INFO		26	/* Get Congestion Control (optional) info */
 #define MPTCP_ENABLED		42
 
+#define TCP_MULTIPATH_DEBUG			10001				/* MPTCP DEBUG on/off */
+#define TCP_MULTIPATH_ENABLE			MPTCP_ENABLED	/* MPTCP DISABLED on/off */
+#define TCP_MULTIPATH_ADD				10003	/* not yet implemented */
+#define TCP_MULTIPATH_REMOVE			10004	/* not yet implemented */
+#define TCP_MULTIPATH_SUBFLOWS		10005	/* not yet implemented */
+#define TCP_MULTIPATH_CONNID			10006	/* not yet implemented */
+#define TCP_MULTIPATH_NDIFFPORTS		10007	/* MPTCP NDIFFPORTS */
+#define TCP_MULTIPATH_PATHMANAGER	10008	/* MPTCP PATHMANAGER */
+#define TCP_MULTIPATH_SCHEDULER		10009	/* MPTCP SCHEDULER */
+
 struct tcp_repair_opt {
 	__u32	opt_code;
 	__u32	opt_val;

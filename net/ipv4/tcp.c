@@ -2378,6 +2378,9 @@ static int tcp_repair_options_est(struct tcp_sock *tp,
 	return 0;
 }
 
+struct mptcp_pm_ops *mptcp_pm_find(const char *name);
+struct mptcp_sched_ops *mptcp_sched_find(const char *name);
+
 /*
  *	Socket option code for TCP.
  */
@@ -2408,6 +2411,50 @@ static int do_tcp_setsockopt(struct sock *sk, int level,
 		release_sock(sk);
 		return err;
 	}
+	case TCP_MULTIPATH_PATHMANAGER: {
+		char name[MPTCP_PM_NAME_MAX];
+
+		if (optlen < 1)
+			return -EINVAL;
+
+		val = strncpy_from_user(name, optval,
+					min_t(long, MPTCP_PM_NAME_MAX-1, optlen));
+		if (val < 0)
+			return -EFAULT;
+		name[val] = 0;
+
+		lock_sock(sk);
+		tp->mptcp_pm = mptcp_pm_find(name);
+		release_sock(sk);
+
+		if (!tp->mptcp_pm)
+			return -EFAULT;
+		return 0;
+	}
+	case TCP_MULTIPATH_SCHEDULER: {
+		char name[MPTCP_SCHED_NAME_MAX];
+
+		if (optlen < 1)
+			return -EINVAL;
+
+		val = strncpy_from_user(name, optval,
+					min_t(long, MPTCP_SCHED_NAME_MAX-1, optlen));
+		if (val < 0)
+			return -EFAULT;
+		name[val] = 0;
+
+		lock_sock(sk);
+		tp->mptcp_sched = mptcp_sched_find(name);
+		release_sock(sk);
+
+		if (!tp->mptcp_sched)
+			return -EFAULT;
+		return 0;
+	}
+	case TCP_MULTIPATH_ADD:
+	case TCP_MULTIPATH_REMOVE:
+		/* Implement Me! */
+		return -EOPNOTSUPP;
 	default:
 		/* fallthru */
 		break;
@@ -2660,6 +2707,7 @@ static int do_tcp_setsockopt(struct sock *sk, int level,
 		break;
 #ifdef CONFIG_MPTCP
 	case MPTCP_ENABLED:
+	case 10002:   /* !!! FIXME: compatibility to old patch !!! */
 		if (mptcp_init_failed || !sysctl_mptcp_enabled ||
 		    sk->sk_state != TCP_CLOSE) {
 			err = -EPERM;
@@ -2671,6 +2719,18 @@ static int do_tcp_setsockopt(struct sock *sk, int level,
 		else
 			mptcp_disable_sock(sk);
 		break;
+	case TCP_MULTIPATH_DEBUG:
+		if (val)
+			tp->debug_on = 1;
+		else
+			tp->debug_on = 0;
+		break;
+	case TCP_MULTIPATH_NDIFFPORTS:
+		if (val < 0)
+			err = -EINVAL;
+		else
+			tp->ndiffports = val;
+		break;		
 #endif
 	default:
 		err = -ENOPROTOOPT;
@@ -2941,8 +3001,45 @@ static int do_tcp_getsockopt(struct sock *sk, int level,
 		val = sock_flag(sk, SOCK_MPTCP) ? 1 : 0;
 		break;
 #endif
+
+	case TCP_MULTIPATH_DEBUG:
+		val = tp->debug_on;
+		break;
+	case TCP_MULTIPATH_NDIFFPORTS:
+		val = tp->ndiffports;
+		break;
+	case TCP_MULTIPATH_SUBFLOWS:
+	case TCP_MULTIPATH_CONNID:
+		/* Implement Me! */
+		return -EOPNOTSUPP;
+
+	case TCP_MULTIPATH_PATHMANAGER: {
+			if (get_user(len, optlen))
+				return -EFAULT;
+			len = min_t(unsigned int, len, MPTCP_PM_NAME_MAX);
+			if (put_user(len, optlen))
+				return -EFAULT;
+			if (copy_to_user(optval, tp->mptcp_pm->name, len))
+				return -EFAULT;
+			return 0;
+		}
+		break;
+
+	case TCP_MULTIPATH_SCHEDULER: {
+			if (get_user(len, optlen))
+				return -EFAULT;
+			len = min_t(unsigned int, len, MPTCP_SCHED_NAME_MAX);
+			if (put_user(len, optlen))
+				return -EFAULT;
+			if (copy_to_user(optval, tp->mptcp_sched->name, len))
+				return -EFAULT;
+			return 0;
+		}
+		break;
+
 	default:
 		return -ENOPROTOOPT;
+		break;
 	}
 
 	if (put_user(len, optlen))

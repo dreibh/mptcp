@@ -4,11 +4,18 @@
  *	Current Maintainer & Author:
  *	Denis Lugowski <denis.lugowski@haw-hamburg.de>
  *
+ * For the algorithm design, see:
+ * Dreibholz, Thomas: "Evaluation and Optimisation of Multi-Path Transport using
+ * the Stream Control Transmission Protocol", Habilitation Treatise, University
+ * of Duisburg-Essen, Faculty of Economics, Institute for Computer Science and
+ * Business Information Systems, URN urn:nbn:de:hbz:464-20120315-103208-1,
+ * March 13, 2012
+ * URL: https://duepublico.uni-duisburg-essen.de/servlets/DerivateServlet/Derivate-29737/Dre2012_final.pdf
  *
- *	This program is free software; you can redistribute it and/or
- *      modify it under the terms of the GNU General Public License
- *      as published by the Free Software Foundation; either version
- *      2 of the License, or (at your option) any later version.
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version
+ * 2 of the License, or (at your option) any later version.
  */
 #include <net/tcp.h>
 #include <net/mptcp.h>

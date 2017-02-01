@@ -1279,9 +1279,9 @@ void sock_lock_init(struct sock *sk)
 	/* Reclassify the lock-class for subflows */
 	if (sk->sk_type == SOCK_STREAM && sk->sk_protocol == IPPROTO_TCP)
 		if (mptcp(tcp_sk(sk)) || tcp_sk(sk)->is_master_sk) {
-			sock_lock_init_class_and_name(sk, "slock-AF_INET-MPTCP",
+			sock_lock_init_class_and_name(sk, meta_slock_key_name,
 						      &meta_slock_key,
-						      "sk_lock-AF_INET-MPTCP",
+						      meta_key_name,
 						      &meta_key);
 
 			/* We don't yet have the mptcp-point.
@@ -1309,10 +1309,15 @@ static void sock_copy(struct sock *nsk, const struct sock *osk)
 #ifdef CONFIG_SECURITY_NETWORK
 	void *sptr = nsk->sk_security;
 #endif
-	memcpy(nsk, osk, offsetof(struct sock, sk_dontcopy_begin));
 
-	memcpy(&nsk->sk_dontcopy_end, &osk->sk_dontcopy_end,
-	       osk->sk_prot->obj_size - offsetof(struct sock, sk_dontcopy_end));
+	if (osk->sk_prot->copy_sk) {
+		osk->sk_prot->copy_sk(nsk, osk);
+	} else {
+		memcpy(nsk, osk, offsetof(struct sock, sk_dontcopy_begin));
+
+		memcpy(&nsk->sk_dontcopy_end, &osk->sk_dontcopy_end,
+		       osk->sk_prot->obj_size - offsetof(struct sock, sk_dontcopy_end));
+	}
 
 #ifdef CONFIG_SECURITY_NETWORK
 	nsk->sk_security = sptr;

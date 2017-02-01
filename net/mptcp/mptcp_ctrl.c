@@ -734,6 +734,8 @@ static void mptcp_set_state(struct sock *sk)
 			meta_sk->sk_state_change(meta_sk);
 			sk_wake_async(meta_sk, SOCK_WAKE_IO, POLL_OUT);
 		}
+
+		tcp_sk(meta_sk)->lsndtime = tcp_time_stamp;
 	}
 
 	if (sk->sk_state == TCP_ESTABLISHED) {
@@ -993,7 +995,9 @@ int mptcp_backlog_rcv(struct sock *meta_sk, struct sk_buff *skb)
 }
 
 struct lock_class_key meta_key;
+char *meta_key_name = "sk_lock-AF_INET-MPTCP";
 struct lock_class_key meta_slock_key;
+char *meta_slock_key_name = "slock-AF_INET-MPTCP";
 
 static const struct tcp_sock_ops mptcp_meta_specific = {
 	.__select_window		= __mptcp_select_window,
@@ -1770,9 +1774,9 @@ adjudge_to_death:
 	}
 	if (meta_sk->sk_state != TCP_CLOSE) {
 		sk_mem_reclaim(meta_sk);
-		if (tcp_too_many_orphans(meta_sk, 0)) {
+		if (tcp_check_oom(meta_sk, 0)) {
 			if (net_ratelimit())
-				pr_info("MPTCP: too many of orphaned sockets\n");
+				pr_info("MPTCP: out of memory: force closing socket\n");
 			tcp_set_state(meta_sk, TCP_CLOSE);
 			meta_tp->ops->send_active_reset(meta_sk, GFP_ATOMIC);
 			NET_INC_STATS_BH(sock_net(meta_sk),
@@ -2117,7 +2121,6 @@ struct sock *mptcp_check_req_child(struct sock *meta_sk, struct sock *child,
 teardown:
 	/* Drop this request - sock creation failed. */
 	inet_csk_reqsk_queue_drop(meta_sk, req);
-	reqsk_put(req);
 	inet_csk_prepare_forced_close(child);
 	tcp_done(child);
 	return meta_sk;
@@ -2661,7 +2664,7 @@ void __init mptcp_init(void)
 	if (mptcp_register_scheduler(&mptcp_sched_default))
 		goto register_sched_failed;
 
-	pr_info("MPTCP: Stable release v0.91.2");
+	pr_info("MPTCP: Stable release v0.91.3");
 
 	mptcp_init_failed = false;
 

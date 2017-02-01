@@ -623,6 +623,7 @@ int mptcp_write_wakeup(struct sock *meta_sk)
 		tcp_event_new_data_sent(meta_sk, skb);
 
 		__tcp_push_pending_frames(subsk, mss, TCP_NAGLE_PUSH);
+		meta_tp->lsndtime = tcp_time_stamp;
 
 		return 0;
 	} else {
@@ -743,6 +744,8 @@ bool mptcp_write_xmit(struct sock *meta_sk, unsigned int mss_now, int nonagle,
 		 * always push on the subflow
 		 */
 		__tcp_push_pending_frames(subsk, mss_now, TCP_NAGLE_PUSH);
+		meta_tp->lsndtime = tcp_time_stamp;
+
 		path_mask |= mptcp_pi_to_flag(subtp->mptcp->path_index);
 		skb_mstamp_get(&skb->skb_mstamp);
 
@@ -1294,10 +1297,13 @@ void mptcp_send_active_reset(struct sock *meta_sk, gfp_t priority)
 
 	mptcp_sub_force_close_all(mpcb, sk);
 
+	tcp_set_state(sk, TCP_RST_WAIT);
+
 	if (!in_serving_softirq())
 		local_bh_enable();
 
 	tcp_send_ack(sk);
+	tcp_clear_xmit_timers(sk);
 	inet_csk_reset_keepalive_timer(sk, inet_csk(sk)->icsk_rto);
 
 	meta_tp->send_mp_fclose = 1;
@@ -1464,6 +1470,7 @@ int mptcp_retransmit_skb(struct sock *meta_sk, struct sk_buff *skb)
 		meta_tp->retrans_stamp = tcp_skb_timestamp(skb);
 
 	__tcp_push_pending_frames(subsk, mss_now, TCP_NAGLE_PUSH);
+	meta_tp->lsndtime = tcp_time_stamp;
 
 	return 0;
 

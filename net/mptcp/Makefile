@@ -12,6 +12,7 @@ obj-$(CONFIG_TCP_CONG_LIA) += mptcp_coupled.o
 obj-$(CONFIG_TCP_CONG_OLIA) += mptcp_olia.o
 obj-$(CONFIG_TCP_CONG_WVEGAS) += mptcp_wvegas.o
 obj-$(CONFIG_TCP_CONG_BALIA) += mptcp_balia.o
+obj-$(CONFIG_TCP_CONG_CMTRPV2) += mptcp_cmtrpv2.o
 obj-$(CONFIG_MPTCP_FULLMESH) += mptcp_fullmesh.o
 obj-$(CONFIG_MPTCP_NDIFFPORTS) += mptcp_ndiffports.o
 obj-$(CONFIG_MPTCP_BINDER) += mptcp_binder.o

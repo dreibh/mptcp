@@ -87,6 +87,8 @@ struct tcp_out_options {
 	__u32	tsval, tsecr;	/* need to include OPTION_TS */
 	struct tcp_fastopen_cookie *fastopen_cookie;	/* Fast open cookie */
 #ifdef CONFIG_MPTCP
+	int ndiffports;
+	int debug_on;
 	u16	mptcp_options;	/* bit field of MPTCP related OPTION_* */
 	u8	dss_csum:1,	/* dss-checksum required? */
 		add_addr_v4:1,

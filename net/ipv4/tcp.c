@@ -2774,16 +2774,16 @@ static int do_tcp_setsockopt(struct sock *sk, int level,
 	case MPTCP_DEBUG:
 	case 10001:   /* !!! FIXME: compatibility to old patch !!! */      
 		if (val)
-			tp->debug_on = 1;
+			tp->mptcp_debug = 1;
 		else
-			tp->debug_on = 0;
+			tp->mptcp_debug = 0;
 		break;
 	case MPTCP_NDIFFPORTS:
 	case 10007:   /* !!! FIXME: compatibility to old patch !!! */      
 		if (val < 0)
 			err = -EINVAL;
 		else
-			tp->ndiffports = val;
+			tp->mptcp_ndiffports = val;
 		break;
 	case MPTCP_INFO:
 		if (mptcp_init_failed || !sysctl_mptcp_enabled) {
@@ -3147,12 +3147,12 @@ static int do_tcp_getsockopt(struct sock *sk, int level,
 
 	case MPTCP_DEBUG:
 	case 10001:   /* !!! FIXME: compatibility to old patch !!! */
-		val = tp->debug_on;
+		val = tp->mptcp_debug;
 		break;
 
 	case MPTCP_NDIFFPORTS:
 	case 10007:   /* !!! FIXME: compatibility to old patch !!! */
-		val = tp->ndiffports;
+		val = tp->mptcp_ndiffports;
 		break;
       
 	case MPTCP_INFO:

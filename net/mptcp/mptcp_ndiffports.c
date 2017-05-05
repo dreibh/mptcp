@@ -57,8 +57,8 @@ next_subflow:
 
 	ndiffports = num_subflows;
    meta_tp = tcp_sk(meta_sk);
-	if (meta_tp->ndiffports > 0)
-		ndiffports = meta_tp->ndiffports;
+	if (meta_tp->mptcp_ndiffports > 0)
+		ndiffports = meta_tp->mptcp_ndiffports;
 
 	if (ndiffports > iter && ndiffports > mpcb->cnt_subflows) {
 		if (meta_sk->sk_family == AF_INET ||

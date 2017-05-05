@@ -663,12 +663,11 @@ extern int sysctl_mptcp_syn_retries;
 
 extern struct workqueue_struct *mptcp_wq;
 
-/* sfo */
 #define mptcp_debug2(mpcb, fmt, args...)				\
 	do {								\
 		struct sock *meta_sk = mpcb ? mpcb->meta_sk : NULL;	\
 		struct tcp_sock *meta_tp = tcp_sk(meta_sk);		\
-		u8 debug_on = meta_tp ? meta_tp->debug_on : 0;		\
+		int debug_on = meta_tp ? meta_tp->mptcp_debug : 0;		\
 		if (unlikely(sysctl_mptcp_debug || debug_on)) 		\
 			pr_err(__FILE__ ": " fmt, ##args);	\
 	} while (0)

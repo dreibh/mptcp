@@ -1,6 +1,5 @@
-linux (4.4.67-040467.201705080411) xenial; urgency=low
+linux-mptcp (4.4.67-040467.201705110000~xenial) xenial; urgency=low
 
   Mainline build at commit: v4.4.67
 
- -- Mainline Build <kernel@tangerine>  Mon, 08 May 2017 04:11:25 -0400
-
+ -- Thomas Dreibholz <dreibh@simula.no>  Thu, 11 May 2017 08:08:08 +0800

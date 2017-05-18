@@ -2444,7 +2444,7 @@ static int do_tcp_setsockopt(struct sock *sk, int level,
 	}
 #ifdef CONFIG_MPTCP
 	case MPTCP_SCHEDULER:
-	case 10009:   /* !!! FIXME: compatibility to old patch !!! */
+	case MPTCP_SCHEDULER_LEGACY:   /* !!! FIXME: compatibility to old patch !!! */
 	{
 		char name[MPTCP_SCHED_NAME_MAX];
 
@@ -2473,7 +2473,7 @@ static int do_tcp_setsockopt(struct sock *sk, int level,
 	}
 
 	case MPTCP_PATH_MANAGER:
-	case 10008:   /* !!! FIXME: compatibility to old patch !!! */
+	case MPTCP_PATH_MANAGER_LEGACY:   /* !!! FIXME: compatibility to old patch !!! */
 	{
 		char name[MPTCP_PM_NAME_MAX];
 
@@ -2760,7 +2760,7 @@ static int do_tcp_setsockopt(struct sock *sk, int level,
 		break;
 #ifdef CONFIG_MPTCP
 	case MPTCP_ENABLED:
-	case 10002:   /* !!! FIXME: compatibility to old patch !!! */
+	case MPTCP_ENABLED_LEGACY:   /* !!! FIXME: compatibility to old patch !!! */
 		if (mptcp_init_failed || !sysctl_mptcp_enabled ||
 		    sk->sk_state != TCP_CLOSE) {
 			err = -EPERM;
@@ -2773,14 +2773,14 @@ static int do_tcp_setsockopt(struct sock *sk, int level,
 			mptcp_disable_sock(sk);
 		break;
 	case MPTCP_DEBUG:
-	case 10001:   /* !!! FIXME: compatibility to old patch !!! */      
+	case MPTCP_DEBUG_LEGACY:   /* !!! FIXME: compatibility to old patch !!! */      
 		if (val)
 			tp->mptcp_debug = 1;
 		else
 			tp->mptcp_debug = 0;
 		break;
 	case MPTCP_NDIFFPORTS:
-	case 10007:   /* !!! FIXME: compatibility to old patch !!! */      
+	case MPTCP_NDIFFPORTS_LEGACY:   /* !!! FIXME: compatibility to old patch !!! */      
 		if (val < 0)
 			err = -EINVAL;
 		else
@@ -3099,7 +3099,7 @@ static int do_tcp_getsockopt(struct sock *sk, int level,
 	}
 #ifdef CONFIG_MPTCP
 	case MPTCP_SCHEDULER:
-	case 10009:   /* !!! FIXME: compatibility to old patch !!! */
+	case MPTCP_SCHEDULER_LEGACY:   /* !!! FIXME: compatibility to old patch !!! */
 		if (get_user(len, optlen))
 			return -EFAULT;
 		len = min_t(unsigned int, len, MPTCP_SCHED_NAME_MAX);
@@ -3119,7 +3119,7 @@ static int do_tcp_getsockopt(struct sock *sk, int level,
 		return 0;
 
 	case MPTCP_PATH_MANAGER:
-	case 10008:   /* !!! FIXME: compatibility to old patch !!! */
+	case MPTCP_PATH_MANAGER_LEGACY:   /* !!! FIXME: compatibility to old patch !!! */
 		if (get_user(len, optlen))
 			return -EFAULT;
 		len = min_t(unsigned int, len, MPTCP_PM_NAME_MAX);
@@ -3139,7 +3139,7 @@ static int do_tcp_getsockopt(struct sock *sk, int level,
 		return 0;
 
 	case MPTCP_ENABLED:
-	case 10002:   /* !!! FIXME: compatibility to old patch !!! */
+	case MPTCP_ENABLED_LEGACY:   /* !!! FIXME: compatibility to old patch !!! */
 		if (sk->sk_state != TCP_SYN_SENT)
 			val = mptcp(tp) ? 1 : 0;
 		else
@@ -3147,12 +3147,12 @@ static int do_tcp_getsockopt(struct sock *sk, int level,
 		break;
 
 	case MPTCP_DEBUG:
-	case 10001:   /* !!! FIXME: compatibility to old patch !!! */
+	case MPTCP_DEBUG_LEGACY:   /* !!! FIXME: compatibility to old patch !!! */
 		val = tp->mptcp_debug;
 		break;
 
 	case MPTCP_NDIFFPORTS:
-	case 10007:   /* !!! FIXME: compatibility to old patch !!! */
+	case MPTCP_NDIFFPORTS_LEGACY:   /* !!! FIXME: compatibility to old patch !!! */
 		val = tp->mptcp_ndiffports;
 		break;
       

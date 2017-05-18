@@ -9020,3 +9020,38 @@ CONFIG_ZRAM_LZ4_COMPRESS=y
 CONFIG_ZSMALLOC=y
 # CONFIG_ZSMALLOC_STAT is not set
 CONFIG_ZSWAP=y
+
+# ###### NorNet Kernel ######################################################
+
+# ====== System ===========================================
+# For F18 only:
+# NOTE: CONFIG_CC_STACKPROTECTOR_STRONG is not supported by F18's gcc
+# -- CONFIG_CC_STACKPROTECTOR_STRONG=
+# -- CONFIG_CC_STACKPROTECTOR_REGULAR=y
+
+# ====== MPTCP ============================================
+CONFIG_TCP_CONG_LIA=m
+CONFIG_TCP_CONG_OLIA=m
+CONFIG_TCP_CONG_WVEGAS=m
+
+# CMT/RPv2
+CONFIG_TCP_CONG_CMTRPV2=m
+
+# Balia CC
+CONFIG_TCP_CONG_BALIA=m
+
+CONFIG_MPTCP=y
+CONFIG_MPTCP_PM_ADVANCED=y
+CONFIG_MPTCP_FULLMESH=y
+CONFIG_MPTCP_NDIFFPORTS=m
+CONFIG_MPTCP_BINDER=m
+CONFIG_DEFAULT_FULLMESH=y
+CONFIG_DEFAULT_DUMMY=n
+CONFIG_DEFAULT_MPTCP_PM="fullmesh"
+CONFIG_MPTCP_SCHED_ADVANCED=y
+CONFIG_MPTCP_ROUNDROBIN=m
+CONFIG_MPTCP_REDUNDANT=m
+CONFIG_DEFAULT_SCHEDULER=y
+CONFIG_DEFAULT_MPTCP_SCHED="default"
+
+# ###### NorNet Kernel ######################################################

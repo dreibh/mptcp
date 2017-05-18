@@ -10298,3 +10298,25 @@ CONFIG_APPLDATA_NET_SUM                         policy<{'s390x': 'm'}>
 #CONFIG_TOUCHSCREEN_EETI				p policy<(arch armel armhf &/ value n) | value m> flag<BUILD FAILURE> note<FTBS on ti-omap4>
 #CONFIG_SENSORS_AK8975				p policy<(arch armel armhf &/ value n) | value m> flag<BUILD FAILURE> note<FTBS on ti-omap4>
 #CONFIG_PPC_EPAPR_HV_BYTECHAN			n flag<BUILD FAILURE> note<FTBFS on ppc64el>
+
+# ====== MPTCP ============================================
+CONFIG_TCP_CONG_LIA                             policy<{'amd64': 'm', 'arm64': 'm', 'armhf': 'm', 'i386': 'm', 'powerpc': 'm', 'ppc64el': 'm', 's390x': 'm'}>
+CONFIG_TCP_CONG_OLIA                            policy<{'amd64': 'm', 'arm64': 'm', 'armhf': 'm', 'i386': 'm', 'powerpc': 'm', 'ppc64el': 'm', 's390x': 'm'}>
+CONFIG_TCP_CONG_WVEGAS                          policy<{'amd64': 'm', 'arm64': 'm', 'armhf': 'm', 'i386': 'm', 'powerpc': 'm', 'ppc64el': 'm', 's390x': 'm'}>
+CONFIG_TCP_CONG_CMTRPV2                         policy<{'amd64': 'm', 'arm64': 'm', 'armhf': 'm', 'i386': 'm', 'powerpc': 'm', 'ppc64el': 'm', 's390x': 'm'}>
+CONFIG_TCP_CONG_BALIA                           policy<{'amd64': 'm', 'arm64': 'm', 'armhf': 'm', 'i386': 'm', 'powerpc': 'm', 'ppc64el': 'm', 's390x': 'm'}>
+
+CONFIG_MPTCP                                    policy<{'amd64': 'y', 'arm64': 'y', 'armhf': 'y', 'i386': 'y', 'powerpc': 'y', 'ppc64el': 'y', 's390x': 'y'}>
+CONFIG_MPTCP_PM_ADVANCED                        policy<{'amd64': 'y', 'arm64': 'y', 'armhf': 'y', 'i386': 'y', 'powerpc': 'y', 'ppc64el': 'y', 's390x': 'y'}>
+CONFIG_MPTCP_FULLMESH                           policy<{'amd64': 'y', 'arm64': 'y', 'armhf': 'y', 'i386': 'y', 'powerpc': 'y', 'ppc64el': 'y', 's390x': 'y'}>
+CONFIG_MPTCP_NDIFFPORTS                         policy<{'amd64': 'm', 'arm64': 'm', 'armhf': 'm', 'i386': 'm', 'powerpc': 'm', 'ppc64el': 'm', 's390x': 'm'}>
+CONFIG_MPTCP_BINDER                             policy<{'amd64': 'm', 'arm64': 'm', 'armhf': 'm', 'i386': 'm', 'powerpc': 'm', 'ppc64el': 'm', 's390x': 'm'}>
+CONFIG_DEFAULT_FULLMESH                         policy<{'amd64': 'y', 'arm64': 'y', 'armhf': 'y', 'i386': 'y', 'powerpc': 'y', 'ppc64el': 'y', 's390x': 'y'}>
+CONFIG_DEFAULT_DUMMY                            policy<{'amd64': 'n', 'arm64': 'n', 'armhf': 'n', 'i386': 'n', 'powerpc': 'n', 'ppc64el': 'n', 's390x': 'n'}>
+CONFIG_DEFAULT_MPTCP_PM                         policy<{'amd64': '"fullmesh"', 'arm64': '"fullmesh"', 'armhf': '"fullmesh"', 'i386': '"fullmesh"', 'powerpc': '"fullmesh"', 'ppc64el': '"fullmesh"', 's390x': '"fullmesh"'}>
+CONFIG_MPTCP_SCHED_ADVANCED                     policy<{'amd64': 'y', 'arm64': 'y', 'armhf': 'y', 'i386': 'y', 'powerpc': 'y', 'ppc64el': 'y', 's390x': 'y'}>
+
+CONFIG_MPTCP_ROUNDROBIN                         policy<{'amd64': 'm', 'arm64': 'm', 'armhf': 'm', 'i386': 'm', 'powerpc': 'm', 'ppc64el': 'm', 's390x': 'm'}>
+CONFIG_MPTCP_REDUNDANT                          policy<{'amd64': 'm', 'arm64': 'm', 'armhf': 'm', 'i386': 'm', 'powerpc': 'm', 'ppc64el': 'm', 's390x': 'm'}>
+CONFIG_DEFAULT_SCHEDULER                        policy<{'amd64': 'y', 'arm64': 'y', 'armhf': 'y', 'i386': 'y', 'powerpc': 'y', 'ppc64el': 'y', 's390x': 'y'}>
+CONFIG_DEFAULT_MPTCP_SCHED                      policy<{'amd64': '"default"', 'arm64': '"default"', 'armhf': '"default"', 'i386': '"default"', 'powerpc': '"default"', 'ppc64el': '"default"', 's390x': '"default"'}>

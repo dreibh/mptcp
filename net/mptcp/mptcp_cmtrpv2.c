@@ -81,7 +81,7 @@ static void mptcp_rpv2_calc_increase_ratio(const struct sock *sk, u32 factor)
 	}
 }
 
-static u32 mptcp_rpv2_calc_ssthresh(const struct sock *sk)
+static u32 mptcp_rpv2_calc_ssthresh(struct sock *sk)
 {
 	const struct mptcp_cb *mpcb = tcp_sk(sk)->mpcb;
 	const struct sock *sub_sk;
@@ -91,7 +91,7 @@ static u32 mptcp_rpv2_calc_ssthresh(const struct sock *sk)
 
 	// For singlepath, find a convenient value for return!
 	if (!mpcb)
-		return;
+		return tcp_reno_ssthresh(sk);
 
 	// Summarize all subflow bandwidths into total_bandwidth.
 	mptcp_for_each_sk(mpcb, sub_sk) {
@@ -207,8 +207,7 @@ u32 mptcp_rpv2_ssthresh(struct sock *sk)
 	const struct tcp_sock *tp = tcp_sk(sk);
 
 	if (!mptcp(tp)) {
-		tcp_reno_ssthresh(sk);
-		return;
+		return tcp_reno_ssthresh(sk);
 	}
 
 	u32 ssthresh = mptcp_rpv2_calc_ssthresh(sk);

@@ -3,6 +3,7 @@
  *
  *	Current Maintainer & Author:
  *	Denis Lugowski <denis.lugowski@haw-hamburg.de>
+ * Thomas Dreibholz <dreibh@simula.no>
  *
  * For the algorithm design, see:
  * Dreibholz, Thomas: "Evaluation and Optimisation of Multi-Path Transport using
@@ -205,12 +206,13 @@ static void mptcp_rpv2_fast_rtx(struct sock *sk, u32 ssthresh)
 u32 mptcp_rpv2_ssthresh(struct sock *sk)
 {
 	const struct tcp_sock *tp = tcp_sk(sk);
+	u32 ssthresh;
 
 	if (!mptcp(tp)) {
 		return tcp_reno_ssthresh(sk);
 	}
 
-	u32 ssthresh = mptcp_rpv2_calc_ssthresh(sk);
+	ssthresh = mptcp_rpv2_calc_ssthresh(sk);
 
 	mptcp_rpv2_fast_rtx(sk, ssthresh);
 
@@ -240,7 +242,7 @@ static void __exit mptcp_rpv2_unregister(void)
 module_init(mptcp_rpv2_register);
 module_exit(mptcp_rpv2_unregister);
 
-MODULE_AUTHOR("Denis Lugowski");
+MODULE_AUTHOR("Denis Lugowski <denis.lugowski@haw-hamburg.de>, Thomas Dreibholz <dreibh@simula.no>");
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("MPTCP CMT/RPv2");
-MODULE_VERSION("0.1");
+MODULE_VERSION("0.9");

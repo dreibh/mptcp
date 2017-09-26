@@ -99,7 +99,8 @@ static inline u64 mptcp_wvegas_rate(u32 cwnd, u32 rtt_us)
 	return div_u64(mptcp_wvegas_scale(cwnd, MPTCP_WVEGAS_SCALE), rtt_us);
 }
 
-static void mptcp_wvegas_pkts_acked(struct sock *sk, const struct ack_sample *sample)
+static void mptcp_wvegas_pkts_acked(struct sock *sk,
+				    const struct ack_sample *sample)
 {
 	struct wvegas *wvegas = inet_csk_ca(sk);
 	u32 vrtt;

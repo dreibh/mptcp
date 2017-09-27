@@ -606,9 +606,6 @@ static void mptcp_sock_def_error_report(struct sock *sk)
 	const struct mptcp_cb *mpcb = tcp_sk(sk)->mpcb;
 	struct sock *meta_sk = mptcp_meta_sk(sk);
 
-	if (!sock_flag(sk, SOCK_DEAD))
-		mptcp_sub_close(sk, 0);
-
 	if (mpcb->infinite_mapping_rcv || mpcb->infinite_mapping_snd ||
 	    mpcb->send_infinite_mapping) {
 
@@ -739,6 +736,11 @@ static void mptcp_set_state(struct sock *sk)
 	if (sk->sk_state == TCP_ESTABLISHED) {
 		tcp_sk(sk)->mptcp->establish_increased = 1;
 		tcp_sk(sk)->mpcb->cnt_established++;
+	}
+
+	if (sk->sk_state == TCP_CLOSE) {
+		if (!sock_flag(sk, SOCK_DEAD))
+			mptcp_sub_close(sk, 0);
 	}
 }
 
@@ -2129,6 +2131,7 @@ struct sock *mptcp_check_req_child(struct sock *meta_sk,
 	 * are attached immediately to the mpcb.
 	 */
 	inet_csk_reqsk_queue_drop(meta_sk, req);
+	reqsk_queue_removed(&inet_csk(meta_sk)->icsk_accept_queue, req);
 
 	/* The refcnt is initialized to 2, because regular TCP will put him
 	 * in the socket's listener queue. However, we do not have a listener-queue.
@@ -2144,6 +2147,7 @@ teardown:
 
 	/* Drop this request - sock creation failed. */
 	inet_csk_reqsk_queue_drop(meta_sk, req);
+	reqsk_queue_removed(&inet_csk(meta_sk)->icsk_accept_queue, req);
 	inet_csk_prepare_forced_close(child);
 	tcp_done(child);
 	return meta_sk;
@@ -2518,7 +2522,7 @@ int mptcp_get_info(const struct sock *meta_sk, char __user *optval, int optlen)
 		len = min_t(unsigned int, m_info.meta_len, sizeof(meta_info));
 		m_info.meta_len = len;
 
-		if (copy_to_user(m_info.meta_info, &meta_info, len))
+		if (copy_to_user((void __user *)m_info.meta_info, &meta_info, len))
 			return -EFAULT;
 	}
 
@@ -2533,10 +2537,10 @@ int mptcp_get_info(const struct sock *meta_sk, char __user *optval, int optlen)
 			struct tcp_info info;
 
 			tcp_get_info(mpcb->master_sk, &info);
-			if (copy_to_user(m_info.initial, &info, info_len))
+			if (copy_to_user((void __user *)m_info.initial, &info, info_len))
 				return -EFAULT;
 		} else if (meta_tp->record_master_info && mpcb->master_info) {
-			if (copy_to_user(m_info.initial, mpcb->master_info, info_len))
+			if (copy_to_user((void __user *)m_info.initial, mpcb->master_info, info_len))
 				return -EFAULT;
 		} else {
 			return meta_tp->record_master_info ? -ENOMEM : -EINVAL;

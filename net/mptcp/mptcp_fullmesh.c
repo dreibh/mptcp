@@ -46,6 +46,7 @@ struct mptcp_loc_addr {
 	struct mptcp_loc6 locaddr6[MPTCP_MAX_ADDR];
 	u8 loc6_bits;
 	u8 next_v6_index;
+	struct rcu_head rcu;
 };
 
 struct mptcp_addr_event {
@@ -725,7 +726,7 @@ next_event:
 			mptcp_local->loc6_bits &= ~(1 << id);
 
 		rcu_assign_pointer(fm_ns->local, mptcp_local);
-		kfree(old);
+		kfree_rcu(old, rcu);
 	} else {
 		int i = mptcp_find_address(mptcp_local, event->family,
 					   &event->addr, event->if_idx);
@@ -787,7 +788,7 @@ next_event:
 		}
 
 		rcu_assign_pointer(fm_ns->local, mptcp_local);
-		kfree(old);
+		kfree_rcu(old, rcu);
 	}
 	success = true;
 
@@ -1273,7 +1274,7 @@ static void full_mesh_new_session(const struct sock *meta_sk)
 #endif
 	}
 
-	rcu_read_lock();
+	rcu_read_lock_bh();
 	mptcp_local = rcu_dereference(fm_ns->local);
 
 	index = mptcp_find_address(mptcp_local, family, &saddr, if_idx);
@@ -1333,7 +1334,7 @@ skip_ipv4:
 skip_ipv6:
 #endif
 
-	rcu_read_unlock();
+	rcu_read_unlock_bh();
 
 	if (family == AF_INET)
 		fmp->announced_addrs_v4 |= (1 << index);
@@ -1349,7 +1350,7 @@ skip_ipv6:
 	return;
 
 fallback:
-	rcu_read_unlock();
+	rcu_read_unlock_bh();
 	mptcp_fallback_default(mpcb);
 	return;
 }
@@ -1405,7 +1406,7 @@ static void full_mesh_release_sock(struct sock *meta_sk)
 	bool meta_v4 = meta_sk->sk_family == AF_INET;
 	int i;
 
-	rcu_read_lock();
+	rcu_read_lock_bh();
 	mptcp_local = rcu_dereference(fm_ns->local);
 
 	if (!meta_v4 && meta_sk->sk_ipv6only)
@@ -1528,7 +1529,7 @@ removal:
 	/* Just call it optimistically. It actually cannot do any harm */
 	update_addr_bitfields(meta_sk, mptcp_local);
 
-	rcu_read_unlock();
+	rcu_read_unlock_bh();
 }
 
 static int full_mesh_get_local_id(sa_family_t family, union inet_addr *addr,
@@ -1539,7 +1540,7 @@ static int full_mesh_get_local_id(sa_family_t family, union inet_addr *addr,
 	int index, id = -1;
 
 	/* Handle the backup-flows */
-	rcu_read_lock();
+	rcu_read_lock_bh();
 	mptcp_local = rcu_dereference(fm_ns->local);
 
 	index = mptcp_find_address(mptcp_local, family, addr, 0);
@@ -1555,7 +1556,7 @@ static int full_mesh_get_local_id(sa_family_t family, union inet_addr *addr,
 	}
 
 
-	rcu_read_unlock();
+	rcu_read_unlock_bh();
 
 	return id;
 }
@@ -1579,7 +1580,7 @@ static void full_mesh_addr_signal(struct sock *sk, unsigned *size,
 	if (likely(!fmp->add_addr))
 		goto remove_addr;
 
-	rcu_read_lock();
+	rcu_read_lock_bh();
 	mptcp_local = rcu_dereference(fm_ns->local);
 
 	if (!meta_v4 && meta_sk->sk_ipv6only)
@@ -1666,7 +1667,7 @@ skip_ipv4:
 	}
 
 skip_ipv6:
-	rcu_read_unlock();
+	rcu_read_unlock_bh();
 
 	if (!unannouncedv4 && !unannouncedv6 && skb)
 		fmp->add_addr--;
@@ -1856,7 +1857,7 @@ static void mptcp_fm_exit_net(struct net *net)
 	rcu_read_lock_bh();
 
 	mptcp_local = rcu_dereference_bh(fm_ns->local);
-	kfree(mptcp_local);
+	kfree_rcu(mptcp_local, rcu);
 
 	spin_lock(&fm_ns->local_lock);
 	list_for_each_entry_safe(eventq, tmp, &fm_ns->events, list) {

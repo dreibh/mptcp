@@ -1717,6 +1717,14 @@ process:
 		if (is_meta_sk(sk)) {
 			bh_lock_sock(sk);
 
+			if (!mptcp_can_new_subflow(sk)) {
+				inet_csk_reqsk_queue_drop_and_put(sk, req);
+				bh_unlock_sock(sk);
+				sock_put(sk);
+
+				return 0;
+			}
+
 			if (sock_owned_by_user(sk)) {
 				skb->sk = sk;
 				if (unlikely(sk_add_backlog(sk, skb,
@@ -1975,7 +1983,7 @@ void tcp_v4_destroy_sock(struct sock *sk)
 	if (mptcp(tp))
 		mptcp_destroy_sock(sk);
 	if (tp->inside_tk_table)
-		mptcp_hash_remove(tp);
+		mptcp_hash_remove_bh(tp);
 
 	/* Cleanup up the write buffer. */
 	tcp_write_queue_purge(sk);
@@ -2527,6 +2535,9 @@ struct proto tcp_prot = {
 	.proto_cgroup		= tcp_proto_cgroup,
 #endif
 	.diag_destroy		= tcp_abort,
+#ifdef CONFIG_MPTCP
+	.clear_sk		= mptcp_clear_sk,
+#endif
 };
 EXPORT_SYMBOL(tcp_prot);
 

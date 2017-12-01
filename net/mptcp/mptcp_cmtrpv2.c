@@ -73,7 +73,7 @@ static void mptcp_rpv2_calc_increase_ratio(const struct sock *sk, u32 factor)
 		}
 
 		denominator = (tp->srtt_us * total_bandwidth) >> rpv2_scale;
-		
+
 		if (!unlikely(denominator))
 			denominator = 1;
 
@@ -97,7 +97,7 @@ static u32 mptcp_rpv2_calc_ssthresh(struct sock *sk)
 	// Summarize all subflow bandwidths into total_bandwidth.
 	mptcp_for_each_sk(mpcb, sub_sk) {
 		struct tcp_sock *sub_tp = tcp_sk(sub_sk);
-		
+
 		if (!mptcp_rpv2_sk_can_send(sub_sk))
 			continue;
 

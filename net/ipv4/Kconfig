@@ -413,7 +413,7 @@ config INET_DIAG
 	  Support for INET (TCP, DCCP, etc) socket monitoring interface used by
 	  native Linux tools such as ss. ss is included in iproute2, currently
 	  downloadable at:
-	  
+
 	    http://www.linuxfoundation.org/collaborate/workgroups/networking/iproute2
 
 	  If unsure, say Y.
@@ -575,7 +575,7 @@ config TCP_CONG_VENO
 	distinguishing to circumvent the difficult judgment of the packet loss
 	type. TCP Veno cuts down less congestion window in response to random
 	loss packets.
-	See <http://ieeexplore.ieee.org/xpl/freeabs_all.jsp?arnumber=1177186> 
+	See <http://ieeexplore.ieee.org/xpl/freeabs_all.jsp?arnumber=1177186>
 
 config TCP_CONG_YEAH
 	tristate "YeAH TCP"
@@ -687,6 +687,22 @@ config TCP_CONG_BALIA
 	Multipath TCP Balanced Linked Adaptation Congestion Control
 	To enable it, just put 'balia' in tcp_congestion_control
 
+config TCP_CONG_CMTRPV2
+	tristate "MPTCP CMT/RPv2 CONGESTION CONTROL"
+	depends on MPTCP
+	default n
+	---help---
+	Multipath TCP Concurrent Multipath Transfer / Resource Pooling version 2 Congestion Control
+	To enable it, just put 'cmtrpv2' in tcp_congestion_control
+
+	For further details, see:
+	Dreibholz, Thomas: "Evaluation and Optimisation of Multi-Path Transport using
+        the Stream Control Transmission Protocol", Habilitation Treatise, University
+        of Duisburg-Essen, Faculty of Economics, Institute for Computer Science and
+        Business Information Systems, URN urn:nbn:de:hbz:464-20120315-103208-1,
+        March 13, 2012
+        URL: https://duepublico.uni-duisburg-essen.de/servlets/DerivateServlet/Derivate-29737/Dre2012_final.pdf
+
 choice
 	prompt "Default TCP congestion control"
 	default DEFAULT_CUBIC
@@ -735,6 +751,9 @@ choice
 
 	config DEFAULT_BALIA
 		bool "Balia" if TCP_CONG_BALIA=y
+
+	config DEFAULT_CMTRPV2
+		bool "CMT/RPv2" if TCP_CONG_CMTRPV2=y
 
 	config DEFAULT_RENO
 		bool "Reno"

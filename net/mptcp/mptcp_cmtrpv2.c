@@ -26,32 +26,32 @@ static int rpv2_scale = 32;
 static int dup_acks_rtx = 3;
 static int snd_buffer = 0;
 
-struct mptcp_rpv2 {
+struct mptcp_cmtrpv2 {
 	u64	increase;
 };
 
 
-static inline int mptcp_rpv2_sk_can_send(const struct sock *sk)
+static inline int mptcp_cmtrpv2_sk_can_send(const struct sock *sk)
 {
 	return mptcp_sk_can_send(sk) && tcp_sk(sk)->srtt_us;
 }
 
-static inline u64 mptcp_rpv2_scale(u32 val, int scale)
+static inline u64 mptcp_cmtrpv2_scale(u32 val, int scale)
 {
 	return (u64) val << scale;
 }
 
 static inline void mptcp_set_increase_ratio(const struct sock *meta_sk, u64 increase)
 {
-	((struct mptcp_rpv2 *)inet_csk_ca(meta_sk))->increase = increase;
+	((struct mptcp_cmtrpv2 *)inet_csk_ca(meta_sk))->increase = increase;
 }
 
 static inline u64 mptcp_get_increase_ratio(const struct sock *meta_sk)
 {
-	return ((struct mptcp_rpv2 *)inet_csk_ca(meta_sk))->increase;
+	return ((struct mptcp_cmtrpv2 *)inet_csk_ca(meta_sk))->increase;
 }
 
-static void mptcp_rpv2_calc_increase_ratio(const struct sock *sk, u32 factor)
+static void mptcp_cmtrpv2_calc_increase_ratio(const struct sock *sk, u32 factor)
 {
 	const struct mptcp_cb *mpcb = tcp_sk(sk)->mpcb;
 	const struct sock *sub_sk;
@@ -66,10 +66,10 @@ static void mptcp_rpv2_calc_increase_ratio(const struct sock *sk, u32 factor)
 		mptcp_for_each_sk(mpcb, sub_sk) {
 			struct tcp_sock *sub_tp = tcp_sk(sub_sk);
 
-			if (!mptcp_rpv2_sk_can_send(sub_sk))
+			if (!mptcp_cmtrpv2_sk_can_send(sub_sk))
 				continue;
 
-			total_bandwidth += div64_u64(mptcp_rpv2_scale(sub_tp->snd_cwnd, rpv2_scale), sub_tp->srtt_us);
+			total_bandwidth += div64_u64(mptcp_cmtrpv2_scale(sub_tp->snd_cwnd, rpv2_scale), sub_tp->srtt_us);
 		}
 
 		denominator = (tp->srtt_us * total_bandwidth) >> rpv2_scale;
@@ -82,7 +82,7 @@ static void mptcp_rpv2_calc_increase_ratio(const struct sock *sk, u32 factor)
 	}
 }
 
-static u32 mptcp_rpv2_calc_ssthresh(struct sock *sk)
+static u32 mptcp_cmtrpv2_calc_ssthresh(struct sock *sk)
 {
 	const struct mptcp_cb *mpcb = tcp_sk(sk)->mpcb;
 	const struct sock *sub_sk;
@@ -98,10 +98,10 @@ static u32 mptcp_rpv2_calc_ssthresh(struct sock *sk)
 	mptcp_for_each_sk(mpcb, sub_sk) {
 		struct tcp_sock *sub_tp = tcp_sk(sub_sk);
 
-		if (!mptcp_rpv2_sk_can_send(sub_sk))
+		if (!mptcp_cmtrpv2_sk_can_send(sub_sk))
 			continue;
 
-		total_bandwidth += div64_u64(mptcp_rpv2_scale(sub_tp->snd_cwnd, rpv2_scale), sub_tp->srtt_us);
+		total_bandwidth += div64_u64(mptcp_cmtrpv2_scale(sub_tp->snd_cwnd, rpv2_scale), sub_tp->srtt_us);
 	}
 
 	decrease =  DIV_ROUND_UP(((total_bandwidth * tp->srtt_us) >> rpv2_scale), 2);
@@ -119,7 +119,7 @@ static u32 mptcp_rpv2_calc_ssthresh(struct sock *sk)
 	return new_ssthresh;
 }
 
-static void mptcp_rpv2_cwnd_event(struct sock *sk, enum tcp_ca_event event)
+static void mptcp_cmtrpv2_cwnd_event(struct sock *sk, enum tcp_ca_event event)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
 
@@ -128,13 +128,13 @@ static void mptcp_rpv2_cwnd_event(struct sock *sk, enum tcp_ca_event event)
 		tp->snd_cwnd = 1;
 }
 
-static void mptcp_rpv2_set_state(struct sock *sk, u8 ca_state)
+static void mptcp_cmtrpv2_set_state(struct sock *sk, u8 ca_state)
 {
 	if (!mptcp(tcp_sk(sk)))
 		return;
 }
 
-static u32 mptcp_rpv2_slow_start(struct tcp_sock *tp, u32 acked)
+static u32 mptcp_cmtrpv2_slow_start(struct tcp_sock *tp, u32 acked)
 {
 	u64 increase = 0;
 	u32 cwnd = tp->snd_cwnd + acked;
@@ -142,7 +142,7 @@ static u32 mptcp_rpv2_slow_start(struct tcp_sock *tp, u32 acked)
 	if (cwnd > tp->snd_ssthresh)
 		cwnd = tp->snd_ssthresh + 1;
 
-	mptcp_rpv2_calc_increase_ratio(tp->meta_sk, min((acked * tp->mss_cache), tp->mss_cache));
+	mptcp_cmtrpv2_calc_increase_ratio(tp->meta_sk, min((acked * tp->mss_cache), tp->mss_cache));
 	increase = mptcp_get_increase_ratio(tp->meta_sk);
 
 	acked -= cwnd - tp->snd_cwnd;
@@ -157,7 +157,7 @@ static u32 mptcp_rpv2_slow_start(struct tcp_sock *tp, u32 acked)
 	return acked;
 }
 
-static void mptcp_rpv2_cong_avoid(struct sock *sk, u32 ack, u32 acked)
+static void mptcp_cmtrpv2_cong_avoid(struct sock *sk, u32 ack, u32 acked)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
 	u64 increase = 0;
@@ -172,11 +172,11 @@ static void mptcp_rpv2_cong_avoid(struct sock *sk, u32 ack, u32 acked)
 
 	if (tp->snd_cwnd <= tp->snd_ssthresh) {
 		/* In "safe" area, increase. */
-		mptcp_rpv2_slow_start(tp, acked);
+		mptcp_cmtrpv2_slow_start(tp, acked);
 		return;
 	}
 
-	mptcp_rpv2_calc_increase_ratio(sk, tp->mss_cache);
+	mptcp_cmtrpv2_calc_increase_ratio(sk, tp->mss_cache);
 	increase = mptcp_get_increase_ratio(mptcp_meta_sk(sk));
 
 	snd_buffer += increase;
@@ -194,7 +194,7 @@ static void mptcp_rpv2_cong_avoid(struct sock *sk, u32 ack, u32 acked)
 	}
 }
 
-static void mptcp_rpv2_fast_rtx(struct sock *sk, u32 ssthresh)
+static void mptcp_cmtrpv2_fast_rtx(struct sock *sk, u32 ssthresh)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
 
@@ -203,7 +203,7 @@ static void mptcp_rpv2_fast_rtx(struct sock *sk, u32 ssthresh)
 		tp->snd_cwnd = ssthresh;
 }
 
-u32 mptcp_rpv2_ssthresh(struct sock *sk)
+u32 mptcp_cmtrpv2_ssthresh(struct sock *sk)
 {
 	const struct tcp_sock *tp = tcp_sk(sk);
 	u32 ssthresh;
@@ -212,35 +212,35 @@ u32 mptcp_rpv2_ssthresh(struct sock *sk)
 		return tcp_reno_ssthresh(sk);
 	}
 
-	ssthresh = mptcp_rpv2_calc_ssthresh(sk);
+	ssthresh = mptcp_cmtrpv2_calc_ssthresh(sk);
 
-	mptcp_rpv2_fast_rtx(sk, ssthresh);
+	mptcp_cmtrpv2_fast_rtx(sk, ssthresh);
 
 	return ssthresh;
 }
 
-static struct tcp_congestion_ops mptcp_rpv2 = {
-	.ssthresh	  = mptcp_rpv2_ssthresh,
-	.cong_avoid	  = mptcp_rpv2_cong_avoid,
-	.cwnd_event   = mptcp_rpv2_cwnd_event,
-	.set_state	  = mptcp_rpv2_set_state,
+static struct tcp_congestion_ops mptcp_cmtrpv2 = {
+	.ssthresh	  = mptcp_cmtrpv2_ssthresh,
+	.cong_avoid	  = mptcp_cmtrpv2_cong_avoid,
+	.cwnd_event   = mptcp_cmtrpv2_cwnd_event,
+	.set_state	  = mptcp_cmtrpv2_set_state,
 	.owner		  = THIS_MODULE,
 	.name		  = "cmtrpv2",
 };
 
-static int __init mptcp_rpv2_register(void)
+static int __init mptcp_cmtrpv2_register(void)
 {
-	BUILD_BUG_ON(sizeof(struct mptcp_rpv2) > ICSK_CA_PRIV_SIZE);
-	return tcp_register_congestion_control(&mptcp_rpv2);
+	BUILD_BUG_ON(sizeof(struct mptcp_cmtrpv2) > ICSK_CA_PRIV_SIZE);
+	return tcp_register_congestion_control(&mptcp_cmtrpv2);
 }
 
-static void __exit mptcp_rpv2_unregister(void)
+static void __exit mptcp_cmtrpv2_unregister(void)
 {
-	tcp_unregister_congestion_control(&mptcp_rpv2);
+	tcp_unregister_congestion_control(&mptcp_cmtrpv2);
 }
 
-module_init(mptcp_rpv2_register);
-module_exit(mptcp_rpv2_unregister);
+module_init(mptcp_cmtrpv2_register);
+module_exit(mptcp_cmtrpv2_unregister);
 
 MODULE_AUTHOR("Denis Lugowski <denis.lugowski@haw-hamburg.de>, Thomas Dreibholz <dreibh@simula.no>");
 MODULE_LICENSE("GPL");

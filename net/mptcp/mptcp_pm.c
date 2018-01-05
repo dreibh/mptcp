@@ -187,9 +187,13 @@ int mptcp_set_path_manager(struct sock *sk, const char *name)
 
 	if (!pm) {
 		err = -ENOENT;
-	} else if (!ns_capable(sock_net(sk)->user_ns, CAP_NET_ADMIN)) {
+	}
+/* NorNet: made PM configurable again by regular user!
+	else if (!ns_capable(sock_net(sk)->user_ns, CAP_NET_ADMIN)) {
 		err = -EPERM;
-	} else {
+	}
+*/
+	else {
 		strcpy(tcp_sk(sk)->mptcp_pm_name, name);
 		tcp_sk(sk)->mptcp_pm_setsockopt = 1;
 	}

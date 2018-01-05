@@ -32,6 +32,7 @@ static void create_subflow_worker(struct work_struct *work)
 						     subflow_work);
 	struct mptcp_cb *mpcb = pm_priv->mpcb;
 	struct sock *meta_sk = mpcb->meta_sk;
+   int ndiffports;
 	int iter = 0;
 
 next_subflow:
@@ -52,6 +53,12 @@ next_subflow:
 	if (mpcb->master_sk &&
 	    !tcp_sk(mpcb->master_sk)->mptcp->fully_established)
 		goto exit;
+
+	ndiffports = num_subflows;
+   meta_tp = tcp_sk(meta_sk);
+	if (meta_tp->mptcp_ndiffports > 0) {
+		ndiffports = meta_tp->mptcp_ndiffports;
+   }
 
 	if (num_subflows > iter && num_subflows > mpcb->cnt_subflows) {
 		if (meta_sk->sk_family == AF_INET ||

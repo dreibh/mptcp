@@ -32,7 +32,8 @@ static void create_subflow_worker(struct work_struct *work)
 						     subflow_work);
 	struct mptcp_cb *mpcb = pm_priv->mpcb;
 	struct sock *meta_sk = mpcb->meta_sk;
-   int ndiffports;
+	struct tcp_sock *meta_tp;
+	int ndiffports;
 	int iter = 0;
 
 next_subflow:

@@ -56,12 +56,13 @@ next_subflow:
 		goto exit;
 
 	ndiffports = num_subflows;
-   meta_tp = tcp_sk(meta_sk);
+	meta_tp = tcp_sk(meta_sk);
 	if (meta_tp->mptcp_ndiffports > 0) {
 		ndiffports = meta_tp->mptcp_ndiffports;
-   }
+	}
+	mptcp_debug("%s: num_subflows=%d ndiffports=%d (opt=%d)\n", __func__, num_subflows, ndiffports, meta_tp->mptcp_ndiffports);
 
-	if (num_subflows > iter && num_subflows > mpcb->cnt_subflows) {
+	if (ndiffports > iter && ndiffports > mpcb->cnt_subflows) {
 		if (meta_sk->sk_family == AF_INET ||
 		    mptcp_v6_is_v4_mapped(meta_sk)) {
 			struct mptcp_loc4 loc;

@@ -2873,7 +2873,6 @@ static int do_tcp_setsockopt(struct sock *sk, int level,
 		break;
 
 	case MPTCP_INFO:
-	case MPTCP_INFO_LEGACY:   /* !!! FIXME: compatibility to old patch !!! */
 		if (mptcp_init_failed || !sysctl_mptcp_enabled) {
 			err = -EPERM;
 			break;
@@ -3289,7 +3288,6 @@ static int do_tcp_getsockopt(struct sock *sk, int level,
 		break;
 
 	case MPTCP_INFO:
-	case MPTCP_INFO_LEGACY:   /* !!! FIXME: compatibility to old patch !!! */
 	{
 		int ret;
 

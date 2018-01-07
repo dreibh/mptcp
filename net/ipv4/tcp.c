@@ -3274,17 +3274,12 @@ static int do_tcp_getsockopt(struct sock *sk, int level,
 
 	case MPTCP_DEBUG:
 	case MPTCP_DEBUG_LEGACY:   /* !!! FIXME: compatibility to old patch !!! */
-		if (val)
-			tp->mptcp_debug = 1;
-		else
-			tp->mptcp_debug = 0;
+		val = tp->mptcp_debug;
 		break;
+
 	case MPTCP_NDIFFPORTS:
 	case MPTCP_NDIFFPORTS_LEGACY:   /* !!! FIXME: compatibility to old patch !!! */
-		if (val < 0)
-			err = -EINVAL;
-		else
-			tp->mptcp_ndiffports = val;
+		val = tp->mptcp_ndiffports;
 		break;
 
 	case MPTCP_INFO:

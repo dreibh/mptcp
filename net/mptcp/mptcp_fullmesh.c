@@ -801,11 +801,19 @@ next_event:
 			mptcp_local->locaddr4[i].loc4_id = i + 1;
 			mptcp_local->locaddr4[i].low_prio = event->low_prio;
 			mptcp_local->locaddr4[i].if_idx = event->if_idx;
+
+			mptcp_debug("%s updated IP %pI4 on ifidx %u prio %u id %u\n",
+				    __func__, &event->addr.in.s_addr,
+				    event->if_idx, event->low_prio, i + 1);
 		} else {
 			mptcp_local->locaddr6[i].addr = event->addr.in6;
 			mptcp_local->locaddr6[i].loc6_id = i + MPTCP_MAX_ADDR;
 			mptcp_local->locaddr6[i].low_prio = event->low_prio;
 			mptcp_local->locaddr6[i].if_idx = event->if_idx;
+
+			mptcp_debug("%s updated IP %pI6 on ifidx %u prio %u id %u\n",
+				    __func__, &event->addr.in6,
+				    event->if_idx, event->low_prio, i + MPTCP_MAX_ADDR);
 		}
 
 		if (j < 0) {
@@ -838,10 +846,9 @@ duno:
 		rcu_read_lock_bh();
 		hlist_nulls_for_each_entry_rcu(meta_tp, node, &tk_hashtable[i],
 					       tk_table) {
-			struct mptcp_cb *mpcb = meta_tp->mpcb;
 			struct sock *meta_sk = (struct sock *)meta_tp, *sk;
-			struct fullmesh_priv *fmp = fullmesh_get_priv(mpcb);
 			bool meta_v4 = meta_sk->sk_family == AF_INET;
+			struct mptcp_cb *mpcb;
 
 			if (sock_net(meta_sk) != net)
 				continue;
@@ -850,15 +857,19 @@ duno:
 				/* skip IPv6 events if meta is IPv4 */
 				if (event->family == AF_INET6)
 					continue;
-			}
-			/* skip IPv4 events if IPV6_V6ONLY is set */
-			else if (event->family == AF_INET && meta_sk->sk_ipv6only)
+			} else if (event->family == AF_INET && meta_sk->sk_ipv6only) {
+				/* skip IPv4 events if IPV6_V6ONLY is set */
 				continue;
+			}
 
 			if (unlikely(!atomic_inc_not_zero(&meta_sk->sk_refcnt)))
 				continue;
 
 			bh_lock_sock(meta_sk);
+
+			mpcb = meta_tp->mpcb;
+			if (!mpcb)
+				goto next;
 
 			if (!mptcp(meta_tp) || !is_meta_sk(meta_sk) ||
 			    mpcb->infinite_mapping_snd ||
@@ -879,6 +890,8 @@ duno:
 			}
 
 			if (event->code == MPTCP_EVENT_ADD) {
+				struct fullmesh_priv *fmp = fullmesh_get_priv(mpcb);
+
 				fmp->add_addr++;
 				mpcb->addr_signal = 1;
 
@@ -1075,8 +1088,8 @@ static void addr4_event_handler(const struct in_ifaddr *ifa, unsigned long event
 	else if (event == NETDEV_CHANGE)
 		mpevent.code = MPTCP_EVENT_MOD;
 
-	mptcp_debug("%s created event for %pI4, code %u prio %u\n", __func__,
-		    &ifa->ifa_local, mpevent.code, mpevent.low_prio);
+	mptcp_debug("%s created event for %pI4, code %u prio %u idx %u\n", __func__,
+		    &ifa->ifa_local, mpevent.code, mpevent.low_prio, mpevent.if_idx);
 	add_pm_event(net, &mpevent);
 
 	spin_unlock_bh(&fm_ns->local_lock);
@@ -1199,8 +1212,8 @@ static void addr6_event_handler(const struct inet6_ifaddr *ifa, unsigned long ev
 	else if (event == NETDEV_CHANGE)
 		mpevent.code = MPTCP_EVENT_MOD;
 
-	mptcp_debug("%s created event for %pI6, code %u prio %u\n", __func__,
-		    &ifa->addr, mpevent.code, mpevent.low_prio);
+	mptcp_debug("%s created event for %pI6, code %u prio %u idx %u\n", __func__,
+		    &ifa->addr, mpevent.code, mpevent.low_prio, mpevent.if_idx);
 	add_pm_event(net, &mpevent);
 
 	spin_unlock_bh(&fm_ns->local_lock);
@@ -1808,7 +1821,7 @@ static int mptcp_fm_seq_show(struct seq_file *seq, void *v)
 	const struct mptcp_fm_ns *fm_ns = fm_get_ns(net);
 	int i;
 
-	seq_printf(seq, "Index, Address-ID, Backup, IP-address\n");
+	seq_printf(seq, "Index, Address-ID, Backup, IP-address, if-idx\n");
 
 	rcu_read_lock_bh();
 	mptcp_local = rcu_dereference(fm_ns->local);
@@ -1818,8 +1831,8 @@ static int mptcp_fm_seq_show(struct seq_file *seq, void *v)
 	mptcp_for_each_bit_set(mptcp_local->loc4_bits, i) {
 		struct mptcp_loc4 *loc4 = &mptcp_local->locaddr4[i];
 
-		seq_printf(seq, "%u, %u, %u, %pI4\n", i, loc4->loc4_id,
-			   loc4->low_prio, &loc4->addr);
+		seq_printf(seq, "%u, %u, %u, %pI4 %u\n", i, loc4->loc4_id,
+			   loc4->low_prio, &loc4->addr, loc4->if_idx);
 	}
 
 	seq_printf(seq, "IPv6, next v6-index: %u\n", mptcp_local->next_v6_index);
@@ -1827,8 +1840,8 @@ static int mptcp_fm_seq_show(struct seq_file *seq, void *v)
 	mptcp_for_each_bit_set(mptcp_local->loc6_bits, i) {
 		struct mptcp_loc6 *loc6 = &mptcp_local->locaddr6[i];
 
-		seq_printf(seq, "%u, %u, %u, %pI6\n", i, loc6->loc6_id,
-			   loc6->low_prio, &loc6->addr);
+		seq_printf(seq, "%u, %u, %u, %pI6 %u\n", i, loc6->loc6_id,
+			   loc6->low_prio, &loc6->addr, loc6->if_idx);
 	}
 	rcu_read_unlock_bh();
 

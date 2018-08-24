@@ -54,8 +54,8 @@ static inline u64 mptcp_get_increase_ratio(const struct sock *meta_sk)
 static void mptcp_cmtrpv2_calc_increase_ratio(const struct sock *sk, u32 factor)
 {
 	const struct mptcp_cb *mpcb = tcp_sk(sk)->mpcb;
-	const struct sock *sub_sk;
 	struct tcp_sock *tp = tcp_sk(sk);
+	struct mptcp_tcp_sock *mptcp;
 	u64 total_bandwidth = 0, increase = 0, denominator = 0;
 
 	if (!mpcb)
@@ -63,7 +63,8 @@ static void mptcp_cmtrpv2_calc_increase_ratio(const struct sock *sk, u32 factor)
 
 	if (unlikely(factor)) {
 		// Summarize all subflow bandwidths into total_bandwidth.
-		mptcp_for_each_sk(mpcb, sub_sk) {
+		mptcp_for_each_sub(mpcb, mptcp) {
+			const struct sock *sub_sk = mptcp_to_sock(mptcp);
 			struct tcp_sock *sub_tp = tcp_sk(sub_sk);
 
 			if (!mptcp_cmtrpv2_sk_can_send(sub_sk))
@@ -85,8 +86,8 @@ static void mptcp_cmtrpv2_calc_increase_ratio(const struct sock *sk, u32 factor)
 static u32 mptcp_cmtrpv2_calc_ssthresh(struct sock *sk)
 {
 	const struct mptcp_cb *mpcb = tcp_sk(sk)->mpcb;
-	const struct sock *sub_sk;
 	struct tcp_sock *tp = tcp_sk(sk);
+    struct mptcp_tcp_sock *mptcp;
 	u64 total_bandwidth = 0, decrease = 0;
 	u32 new_ssthresh = 0;
 
@@ -95,7 +96,8 @@ static u32 mptcp_cmtrpv2_calc_ssthresh(struct sock *sk)
 		return tcp_reno_ssthresh(sk);
 
 	// Summarize all subflow bandwidths into total_bandwidth.
-	mptcp_for_each_sk(mpcb, sub_sk) {
+	mptcp_for_each_sub(mpcb, mptcp) {
+		const struct sock *sub_sk = mptcp_to_sock(mptcp);
 		struct tcp_sock *sub_tp = tcp_sk(sub_sk);
 
 		if (!mptcp_cmtrpv2_sk_can_send(sub_sk))

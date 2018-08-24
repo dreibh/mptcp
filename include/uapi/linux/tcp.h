@@ -136,6 +136,15 @@ enum {
 
 #define MPTCP_INFO_FLAG_SAVE_MASTER	0x01
 
+#define MPTCP_DEBUG		46
+#define MPTCP_NDIFFPORTS	47
+
+#define MPTCP_ENABLED_LEGACY		10002
+#define MPTCP_SCHEDULER_LEGACY		10009
+#define MPTCP_PATH_MANAGER_LEGACY	10008
+#define MPTCP_DEBUG_LEGACY		10001
+#define MPTCP_NDIFFPORTS_LEGACY		10007
+
 struct tcp_repair_opt {
 	__u32	opt_code;
 	__u32	opt_val;

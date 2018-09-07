@@ -297,6 +297,7 @@ static void mptcp_reqsk_new_mptcp(struct request_sock *req,
 	const struct tcp_sock *tp = tcp_sk(sk);
 
 	inet_rsk(req)->saw_mpc = 1;
+
 	/* MPTCP version agreement */
 	if (mopt->mptcp_ver >= tp->mptcp_ver)
 		mtreq->mptcp_ver = tp->mptcp_ver;
@@ -316,10 +317,17 @@ static void mptcp_reqsk_new_mptcp(struct request_sock *req,
 }
 
 static int mptcp_reqsk_new_cookie(struct request_sock *req,
+				  const struct sock *sk,
 				  const struct mptcp_options_received *mopt,
 				  const struct sk_buff *skb)
 {
 	struct mptcp_request_sock *mtreq = mptcp_rsk(req);
+
+	/* MPTCP version agreement */
+	if (mopt->mptcp_ver >= tcp_sk(sk)->mptcp_ver)
+		mtreq->mptcp_ver = tcp_sk(sk)->mptcp_ver;
+	else
+		mtreq->mptcp_ver = mopt->mptcp_ver;
 
 	rcu_read_lock_bh();
 	spin_lock(&mptcp_tk_hashlock);
@@ -976,6 +984,16 @@ static void mptcp_sub_inherit_sockopts(const struct sock *meta_sk, struct sock *
 	inet_sk(sub_sk)->recverr = 0;
 }
 
+void mptcp_prepare_for_backlog(struct sock *sk, struct sk_buff *skb)
+{
+	/* In case of success (in mptcp_backlog_rcv) and error (in kfree_skb) of
+	 * sk_add_backlog, we will decrement the sk refcount.
+	 */
+	sock_hold(sk);
+	skb->sk = sk;
+	skb->destructor = sock_efree;
+}
+
 int mptcp_backlog_rcv(struct sock *meta_sk, struct sk_buff *skb)
 {
 	/* skb-sk may be NULL if we receive a packet immediatly after the
@@ -984,12 +1002,16 @@ int mptcp_backlog_rcv(struct sock *meta_sk, struct sk_buff *skb)
 	struct sock *sk = skb->sk ? skb->sk : meta_sk;
 	int ret = 0;
 
-	skb->sk = NULL;
-
 	if (unlikely(!refcount_inc_not_zero(&sk->sk_refcnt))) {
 		kfree_skb(skb);
 		return 0;
 	}
+
+	/* Decrement sk refcnt when calling the skb destructor.
+	 * Refcnt is incremented and skb destructor is set in tcp_v{4,6}_rcv via
+	 * mptcp_prepare_for_backlog() here above.
+	 */
+	skb_orphan(skb);
 
 	if (sk->sk_family == AF_INET)
 		ret = tcp_v4_do_rcv(sk, skb);
@@ -2064,6 +2086,7 @@ struct sock *mptcp_check_req_child(struct sock *meta_sk,
 	struct mptcp_cb *mpcb = tcp_sk(meta_sk)->mpcb;
 	u8 hash_mac_check[20];
 
+	child_tp->out_of_order_queue = RB_ROOT;
 	child_tp->inside_tk_table = 0;
 
 	if (!mopt->join_ack) {
@@ -2118,7 +2141,6 @@ struct sock *mptcp_check_req_child(struct sock *meta_sk,
 	child_tp->mptcp->init_rcv_wnd = req->rsk_rcv_wnd;
 
 	child->sk_tsq_flags = 0;
-	child_tp->out_of_order_queue = RB_ROOT;
 
 	sock_rps_save_rxhash(child, skb);
 	tcp_synack_rtt_meas(child, req);
@@ -2338,7 +2360,7 @@ void mptcp_reqsk_init(struct request_sock *req, const struct sock *sk,
 	mtreq->dss_csum = mopt.dss_csum;
 
 	if (want_cookie) {
-		if (!mptcp_reqsk_new_cookie(req, &mopt, skb))
+		if (!mptcp_reqsk_new_cookie(req, sk, &mopt, skb))
 			/* No key available - back to regular TCP */
 			inet_rsk(req)->mptcp_rqsk = 0;
 		return;

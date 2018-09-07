@@ -966,7 +966,7 @@ static int mptcp_queue_skb(struct sock *sk)
 		/* Quick ACK if more 3/4 of the receive window is filled */
 		if (after64(tp->mptcp->map_data_seq,
 			    rcv_nxt64 + 3 * (tcp_receive_window(meta_tp) >> 2)))
-			tcp_enter_quickack_mode(sk);
+			tcp_enter_quickack_mode(sk, TCP_MAX_QUICKACKS);
 
 	} else {
 		/* Ready for the meta-rcv-queue */
@@ -1184,7 +1184,6 @@ int mptcp_lookup_join(struct sk_buff *skb, struct inet_timewait_sock *tw)
 	 */
 	bh_lock_sock_nested(meta_sk);
 	if (sock_owned_by_user(meta_sk)) {
-		skb->sk = meta_sk;
 		if (unlikely(sk_add_backlog(meta_sk, skb,
 					    meta_sk->sk_rcvbuf + meta_sk->sk_sndbuf))) {
 			bh_unlock_sock(meta_sk);
@@ -1257,7 +1256,6 @@ int mptcp_do_join_short(struct sk_buff *skb,
 	}
 
 	if (sock_owned_by_user(meta_sk)) {
-		skb->sk = meta_sk;
 		if (unlikely(sk_add_backlog(meta_sk, skb,
 					    meta_sk->sk_rcvbuf + meta_sk->sk_sndbuf)))
 			__NET_INC_STATS(net, LINUX_MIB_TCPBACKLOGDROP);

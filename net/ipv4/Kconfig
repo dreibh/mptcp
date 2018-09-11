@@ -712,6 +712,22 @@ config TCP_CONG_BALIA
 	Multipath TCP Balanced Linked Adaptation Congestion Control
 	To enable it, just put 'balia' in tcp_congestion_control
 
+config TCP_CONG_CMTRPV2
+	tristate "MPTCP CMT/RPv2 CONGESTION CONTROL"
+	depends on MPTCP
+	default n
+	---help---
+	Multipath TCP Concurrent Multipath Transfer / Resource Pooling version 2 Congestion Control
+	To enable it, just put 'cmtrpv2' in tcp_congestion_control
+
+	For further details, see:
+	Dreibholz, Thomas: "Evaluation and Optimisation of Multi-Path Transport using
+        the Stream Control Transmission Protocol", Habilitation Treatise, University
+        of Duisburg-Essen, Faculty of Economics, Institute for Computer Science and
+        Business Information Systems, URN urn:nbn:de:hbz:464-20120315-103208-1,
+        March 13, 2012
+        URL: https://duepublico.uni-duisburg-essen.de/servlets/DerivateServlet/Derivate-29737/Dre2012_final.pdf
+
 config TCP_CONG_MCTCPDESYNC
 	tristate "DESYNCHRONIZED MCTCP CONGESTION CONTROL (EXPERIMENTAL)"
 	depends on MPTCP
@@ -773,6 +789,9 @@ choice
 
 	config DEFAULT_BALIA
 		bool "Balia" if TCP_CONG_BALIA=y
+
+	config DEFAULT_CMTRPV2
+		bool "CMT/RPv2" if TCP_CONG_CMTRPV2=y
 
 	config DEFAULT_MCTCPDESYNC
 		bool "Mctcpdesync (EXPERIMENTAL)" if TCP_CONG_MCTCPDESYNC=y

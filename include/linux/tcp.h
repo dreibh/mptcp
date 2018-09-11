@@ -476,6 +476,8 @@ struct tcp_sock {
 	u64		mptcp_loc_key;
 	char		mptcp_sched_name[MPTCP_SCHED_NAME_MAX];
 	char		mptcp_pm_name[MPTCP_PM_NAME_MAX];
+	int		mptcp_ndiffports;
+	int		mptcp_debug;
 #endif /* CONFIG_MPTCP */
 };
 

@@ -32,6 +32,8 @@ static void create_subflow_worker(struct work_struct *work)
 						     subflow_work);
 	struct mptcp_cb *mpcb = pm_priv->mpcb;
 	struct sock *meta_sk = mpcb->meta_sk;
+	struct tcp_sock *meta_tp;
+	int ndiffports;
 	int iter = 0;
 
 next_subflow:
@@ -53,7 +55,12 @@ next_subflow:
 	    !tcp_sk(mpcb->master_sk)->mptcp->fully_established)
 		goto exit;
 
-	if (num_subflows > iter && num_subflows > mptcp_subflow_count(mpcb)) {
+	ndiffports = num_subflows;
+	meta_tp = tcp_sk(meta_sk);
+	if (meta_tp->mptcp_ndiffports > 0)
+		ndiffports = meta_tp->mptcp_ndiffports;
+
+	if (num_subflows > iter && ndiffports > mptcp_subflow_count(mpcb)) {
 		if (meta_sk->sk_family == AF_INET ||
 		    mptcp_v6_is_v4_mapped(meta_sk)) {
 			struct mptcp_loc4 loc;

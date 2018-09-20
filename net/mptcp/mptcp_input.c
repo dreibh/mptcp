@@ -371,6 +371,8 @@ static int mptcp_verif_dss_csum(struct sock *sk)
 			if (sk_it != sk &&
 			    tcp_sk(sk_it)->mptcp->fully_established)
 				break;
+
+			sk_it = NULL;
 		}
 
 		if (sk_it) {
@@ -384,6 +386,8 @@ static int mptcp_verif_dss_csum(struct sock *sk)
 				tp->copied_seq = TCP_SKB_CB(tmp)->end_seq;
 				kfree_skb(tmp);
 			}
+
+			mptcp_sub_force_close_all(tp->mpcb, sk);
 
 			ans = 0;
 		}
@@ -988,7 +992,7 @@ static int mptcp_queue_skb(struct sock *sk)
 		/* Quick ACK if more 3/4 of the receive window is filled */
 		if (after64(tp->mptcp->map_data_seq,
 			    rcv_nxt64 + 3 * (tcp_receive_window(meta_tp) >> 2)))
-			tcp_enter_quickack_mode(sk);
+			tcp_enter_quickack_mode(sk, TCP_MAX_QUICKACKS);
 
 	} else {
 		/* Ready for the meta-rcv-queue */

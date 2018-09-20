@@ -1399,11 +1399,9 @@ int mptcp_add_sock(struct sock *meta_sk, struct sock *sk, u8 loc_id, u8 rem_id,
 	sock_hold(meta_sk);
 	refcount_inc(&mpcb->mpcb_refcnt);
 
-	local_bh_disable();
-	spin_lock(&mpcb->mpcb_list_lock);
+	spin_lock_bh(&mpcb->mpcb_list_lock);
 	hlist_add_head_rcu(&tp->mptcp->node, &mpcb->conn_list);
-	spin_unlock(&mpcb->mpcb_list_lock);
-	local_bh_enable();
+	spin_unlock_bh(&mpcb->mpcb_list_lock);
 
 	tp->mptcp->attached = 1;
 
@@ -1466,9 +1464,9 @@ void mptcp_del_sock(struct sock *sk)
 		    __func__, mpcb->mptcp_loc_token, tp->mptcp->path_index,
 		    sk->sk_state, is_meta_sk(sk));
 
-	spin_lock(&mpcb->mpcb_list_lock);
+	spin_lock_bh(&mpcb->mpcb_list_lock);
 	hlist_del_init_rcu(&tp->mptcp->node);
-	spin_unlock(&mpcb->mpcb_list_lock);
+	spin_unlock_bh(&mpcb->mpcb_list_lock);
 
 	tp->mptcp->attached = 0;
 	mpcb->path_index_bits &= ~(1 << tp->mptcp->path_index);
@@ -2881,19 +2879,6 @@ static int mptcp_pm_seq_show(struct seq_file *seq, void *v)
 	return 0;
 }
 
-static int mptcp_pm_seq_open(struct inode *inode, struct file *file)
-{
-	return single_open_net(inode, file, mptcp_pm_seq_show);
-}
-
-static const struct file_operations mptcp_pm_seq_fops = {
-	.owner = THIS_MODULE,
-	.open = mptcp_pm_seq_open,
-	.read = seq_read,
-	.llseek = seq_lseek,
-	.release = single_release_net,
-};
-
 static int mptcp_snmp_seq_show(struct seq_file *seq, void *v)
 {
 	struct net *net = seq->private;
@@ -2907,19 +2892,6 @@ static int mptcp_snmp_seq_show(struct seq_file *seq, void *v)
 	return 0;
 }
 
-static int mptcp_snmp_seq_open(struct inode *inode, struct file *file)
-{
-	return single_open_net(inode, file, mptcp_snmp_seq_show);
-}
-
-static const struct file_operations mptcp_snmp_seq_fops = {
-	.owner = THIS_MODULE,
-	.open = mptcp_snmp_seq_open,
-	.read = seq_read,
-	.llseek = seq_lseek,
-	.release = single_release_net,
-};
-
 static int mptcp_pm_init_net(struct net *net)
 {
 	net->mptcp.mptcp_statistics = alloc_percpu(struct mptcp_mib);
@@ -2930,11 +2902,11 @@ static int mptcp_pm_init_net(struct net *net)
 	net->mptcp.proc_net_mptcp = proc_net_mkdir(net, "mptcp_net", net->proc_net);
 	if (!net->mptcp.proc_net_mptcp)
 		goto out_proc_net_mptcp;
-	if (!proc_create("mptcp", S_IRUGO, net->mptcp.proc_net_mptcp,
-			 &mptcp_pm_seq_fops))
+	if (!proc_create_net_single("mptcp", S_IRUGO, net->mptcp.proc_net_mptcp,
+				    mptcp_pm_seq_show, NULL))
 		goto out_mptcp_net_mptcp;
-	if (!proc_create("snmp", S_IRUGO, net->mptcp.proc_net_mptcp,
-			 &mptcp_snmp_seq_fops))
+	if (!proc_create_net_single("snmp", S_IRUGO, net->mptcp.proc_net_mptcp,
+				    mptcp_snmp_seq_show, NULL))
 		goto out_mptcp_net_snmp;
 #endif
 

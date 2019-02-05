@@ -6299,7 +6299,10 @@ int tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb)
 			} else {
 				tcp_send_ack(sk);
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wimplicit-function-declaration"
 				mptcp_push_pending_frames(mptcp_meta_sk(sk));
+#pragma GCC diagnostic pop
 			}
 		}
 		break;

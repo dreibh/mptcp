@@ -77,6 +77,8 @@ bool mptcp_init_failed __read_mostly;
 struct static_key mptcp_static_key = STATIC_KEY_INIT_FALSE;
 EXPORT_SYMBOL(mptcp_static_key);
 
+static void mptcp_key_sha1(u64 key, u32 *token, u64 *idsn);
+
 static int proc_mptcp_path_manager(struct ctl_table *ctl, int write,
 				   void __user *buffer, size_t *lenp,
 				   loff_t *ppos)
@@ -546,6 +548,7 @@ found:
 	rcu_read_unlock_bh();
 	return meta_sk;
 }
+EXPORT_SYMBOL_GPL(mptcp_hash_find);
 
 void mptcp_hash_remove_bh(struct tcp_sock *meta_tp)
 {
@@ -603,7 +606,6 @@ EXPORT_SYMBOL(mptcp_select_ack_sock);
 static void mptcp_sock_def_error_report(struct sock *sk)
 {
 	const struct mptcp_cb *mpcb = tcp_sk(sk)->mpcb;
-	struct sock *meta_sk = mptcp_meta_sk(sk);
 	struct tcp_sock *tp = tcp_sk(sk);
 
 	if (!sock_flag(sk, SOCK_DEAD)) {
@@ -619,8 +621,12 @@ static void mptcp_sock_def_error_report(struct sock *sk)
 		}
 	}
 
+	/* record this info that can be used by PM after the sf close */
+	tp->mptcp->sk_err = sk->sk_err;
+
 	if (mpcb->infinite_mapping_rcv || mpcb->infinite_mapping_snd ||
 	    mpcb->send_infinite_mapping) {
+		struct sock *meta_sk = mptcp_meta_sk(sk);
 
 		meta_sk->sk_err = sk->sk_err;
 		meta_sk->sk_err_soft = sk->sk_err_soft;
@@ -636,9 +642,6 @@ static void mptcp_sock_def_error_report(struct sock *sk)
 		if (meta_sk->sk_state != TCP_CLOSE)
 			tcp_done(meta_sk);
 	}
-
-	if (mpcb->pm_ops->subflow_error)
-		mpcb->pm_ops->subflow_error(meta_sk, sk);
 
 	sk->sk_err = 0;
 	return;
@@ -791,7 +794,7 @@ static void mptcp_assign_congestion_control(struct sock *sk)
 siphash_key_t mptcp_secret __read_mostly;
 u32 mptcp_seed = 0;
 
-void mptcp_key_sha1(u64 key, u32 *token, u64 *idsn)
+static void mptcp_key_sha1(u64 key, u32 *token, u64 *idsn)
 {
 	u32 workspace[SHA_WORKSPACE_WORDS];
 	u32 mptcp_hashed_key[SHA_DIGEST_WORDS];
@@ -812,12 +815,12 @@ void mptcp_key_sha1(u64 key, u32 *token, u64 *idsn)
 	sha_transform(mptcp_hashed_key, input, workspace);
 
 	for (i = 0; i < 5; i++)
-		mptcp_hashed_key[i] = cpu_to_be32(mptcp_hashed_key[i]);
+		mptcp_hashed_key[i] = (__force u32)cpu_to_be32(mptcp_hashed_key[i]);
 
 	if (token)
 		*token = mptcp_hashed_key[0];
 	if (idsn)
-		*idsn = *((u64 *)&mptcp_hashed_key[3]);
+		*idsn = ntohll(*((__be64 *)&mptcp_hashed_key[3]));
 }
 
 void mptcp_hmac_sha1(const u8 *key_1, const u8 *key_2, u32 *hash_out,
@@ -866,7 +869,7 @@ void mptcp_hmac_sha1(const u8 *key_1, const u8 *key_2, u32 *hash_out,
 	memset(workspace, 0, sizeof(workspace));
 
 	for (i = 0; i < 5; i++)
-		hash_out[i] = cpu_to_be32(hash_out[i]);
+		hash_out[i] = (__force u32)cpu_to_be32(hash_out[i]);
 
 	/* Prepare second part of hmac */
 	memset(input, 0x5C, 64);
@@ -890,7 +893,7 @@ void mptcp_hmac_sha1(const u8 *key_1, const u8 *key_2, u32 *hash_out,
 	sha_transform(hash_out, &input[64], workspace);
 
 	for (i = 0; i < 5; i++)
-		hash_out[i] = cpu_to_be32(hash_out[i]);
+		hash_out[i] = (__force u32)cpu_to_be32(hash_out[i]);
 }
 EXPORT_SYMBOL(mptcp_hmac_sha1);
 
@@ -1201,7 +1204,7 @@ static int mptcp_alloc_mpcb(struct sock *meta_sk, __u64 remote_key,
 
 	/* Generate Initial data-sequence-numbers */
 	mptcp_key_sha1(mpcb->mptcp_loc_key, NULL, &idsn);
-	idsn = ntohll(idsn) + 1;
+	idsn++;
 	mpcb->snd_high_order[0] = idsn >> 32;
 	mpcb->snd_high_order[1] = mpcb->snd_high_order[0] - 1;
 
@@ -1214,7 +1217,7 @@ static int mptcp_alloc_mpcb(struct sock *meta_sk, __u64 remote_key,
 
 	mpcb->mptcp_rem_key = remote_key;
 	mptcp_key_sha1(mpcb->mptcp_rem_key, &mpcb->mptcp_rem_token, &idsn);
-	idsn = ntohll(idsn) + 1;
+	idsn++;
 	mpcb->rcv_high_order[0] = idsn >> 32;
 	mpcb->rcv_high_order[1] = mpcb->rcv_high_order[0] + 1;
 	meta_tp->copied_seq = (u32) idsn;
@@ -1854,6 +1857,9 @@ adjudge_to_death:
 		write_unlock_bh(&sk_it->sk_callback_lock);
 	}
 
+	if (mpcb->pm_ops->close_session)
+		mpcb->pm_ops->close_session(meta_sk);
+
 	/* It is the last release_sock in its life. It will remove backlog. */
 	release_sock(meta_sk);
 
@@ -2251,6 +2257,9 @@ struct sock *mptcp_check_req_child(struct sock *meta_sk,
 
 	sock_rps_save_rxhash(child, skb);
 	tcp_synack_rtt_meas(child, req);
+
+	if (mpcb->pm_ops->established_subflow)
+		mpcb->pm_ops->established_subflow(child);
 
 	/* Subflows do not use the accept queue, as they
 	 * are attached immediately to the mpcb.

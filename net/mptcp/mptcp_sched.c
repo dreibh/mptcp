@@ -2,6 +2,7 @@
 
 #include <linux/module.h>
 #include <net/mptcp.h>
+#include <trace/events/tcp.h>
 
 static DEFINE_SPINLOCK(mptcp_sched_list_lock);
 static LIST_HEAD(mptcp_sched_list);
@@ -88,7 +89,7 @@ static bool mptcp_is_temp_unavailable(struct sock *sk,
 	 * calculated end_seq (because here at this point end_seq is still at
 	 * the meta-level).
 	 */
-	if (skb && !zero_wnd_test &&
+	if (skb && zero_wnd_test &&
 	    after(tp->write_seq + min(skb->len, mss_now), tcp_wnd_end(tp)))
 		return true;
 
@@ -335,8 +336,10 @@ retrans:
 			}
 		}
 
-		if (do_retrans && mptcp_is_available(sk, skb_head, false))
+		if (do_retrans && mptcp_is_available(sk, skb_head, false)) {
+			trace_mptcp_retransmit(sk, skb_head);
 			return skb_head;
+		}
 	}
 	return NULL;
 }

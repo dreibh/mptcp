@@ -55,6 +55,8 @@ void tcp_time_wait(struct sock *sk, int state, int timeo);
 
 #define MAX_TCP_HEADER	(128 + MAX_HEADER)
 #define MAX_TCP_OPTION_SPACE 40
+#define TCP_MIN_SND_MSS		48
+#define TCP_MIN_GSO_SIZE	(TCP_MIN_SND_MSS - MAX_TCP_OPTION_SPACE)
 
 /*
  * Never offer a window over 32767 without using window scaling. Some
@@ -378,6 +380,7 @@ bool retransmits_timed_out(struct sock *sk,
 			   unsigned int timeout);
 void tcp_write_err(struct sock *sk);
 void tcp_adjust_pcount(struct sock *sk, const struct sk_buff *skb, int decr);
+void tcp_update_skb_after_send(struct tcp_sock *tp, struct sk_buff *skb);
 void tcp_set_skb_tso_segs(struct sk_buff *skb, unsigned int mss_now);
 
 void tcp_v4_reqsk_send_ack(const struct sock *sk, struct sk_buff *skb,
@@ -696,7 +699,6 @@ void tcp_skb_collapse_tstamp(struct sk_buff *skb,
 			     const struct sk_buff *next_skb);
 
 u16 tcp_select_window(struct sock *sk);
-int select_size(const struct sock *sk, bool first_skb, bool zc);
 bool tcp_write_xmit(struct sock *sk, unsigned int mss_now, int nonagle,
 		int push_one, gfp_t gfp);
 

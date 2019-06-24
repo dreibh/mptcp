@@ -1032,7 +1032,7 @@ static void tcp_internal_pacing(struct sock *sk, const struct sk_buff *skb)
 	sock_hold(sk);
 }
 
-static void tcp_update_skb_after_send(struct tcp_sock *tp, struct sk_buff *skb)
+void tcp_update_skb_after_send(struct tcp_sock *tp, struct sk_buff *skb)
 {
 	skb->skb_mstamp = tp->tcp_mstamp;
 	list_move_tail(&skb->tcp_tsorted_anchor, &tp->tsorted_sent_queue);
@@ -1335,6 +1335,12 @@ int tcp_fragment(struct sock *sk, enum tcp_queue tcp_queue,
 	if (nsize < 0)
 		nsize = 0;
 
+	if (unlikely((sk->sk_wmem_queued >> 1) > sk->sk_sndbuf &&
+		     tcp_queue != TCP_FRAG_IN_WRITE_QUEUE)) {
+		NET_INC_STATS(sock_net(sk), LINUX_MIB_TCPWQUEUETOOBIG);
+		return -ENOMEM;
+	}
+
 	if (skb_unclone(skb, gfp))
 		return -ENOMEM;
 
@@ -1493,8 +1499,7 @@ static inline int __tcp_mtu_to_mss(struct sock *sk, int pmtu)
 	mss_now -= icsk->icsk_ext_hdr_len;
 
 	/* Then reserve room for full set of TCP options and 8 bytes of data */
-	if (mss_now < 48)
-		mss_now = 48;
+	mss_now = max(mss_now, sock_net(sk)->ipv4.sysctl_tcp_min_snd_mss);
 	return mss_now;
 }
 
@@ -1952,9 +1957,6 @@ static bool tcp_tso_should_defer(struct sock *sk, struct sk_buff *skb,
 	struct sk_buff *head;
 	int win_divisor;
 
-	if ((TCP_SKB_CB(skb)->tcp_flags & TCPHDR_FIN) || mptcp_is_data_fin(skb))
-		goto send_now;
-
 	if (icsk->icsk_ca_state >= TCP_CA_Recovery)
 		goto send_now;
 
@@ -2032,7 +2034,7 @@ static bool tcp_tso_should_defer(struct sock *sk, struct sk_buff *skb,
 	}
 
 	/* If this packet won't get more data, do not wait. */
-	if (TCP_SKB_CB(skb)->tcp_flags & TCPHDR_FIN)
+	if ((TCP_SKB_CB(skb)->tcp_flags & TCPHDR_FIN) || mptcp_is_data_fin(skb))
 		goto send_now;
 
 	return true;
@@ -2777,7 +2779,7 @@ static bool tcp_collapse_retrans(struct sock *sk, struct sk_buff *skb)
 		if (next_skb_size <= skb_availroom(skb))
 			skb_copy_bits(next_skb, 0, skb_put(skb, next_skb_size),
 				      next_skb_size);
-		else if (!skb_shift(skb, next_skb, next_skb_size))
+		else if (!tcp_skb_shift(skb, next_skb, 1, next_skb_size))
 			return false;
 	}
 	tcp_highest_sack_replace(sk, next_skb, skb);

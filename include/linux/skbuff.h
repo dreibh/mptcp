@@ -1333,10 +1333,12 @@ static inline void skb_zcopy_clear(struct sk_buff *skb, bool zerocopy)
 	struct ubuf_info *uarg = skb_zcopy(skb);
 
 	if (uarg) {
-		if (uarg->callback == sock_zerocopy_callback) {
+		if (skb_zcopy_is_nouarg(skb)) {
+			/* no notification callback */
+		} else if (uarg->callback == sock_zerocopy_callback) {
 			uarg->zerocopy = uarg->zerocopy && zerocopy;
 			sock_zerocopy_put(uarg);
-		} else if (!skb_zcopy_is_nouarg(skb)) {
+		} else {
 			uarg->callback(uarg, zerocopy);
 		}
 
@@ -2587,7 +2589,8 @@ static inline int skb_orphan_frags(struct sk_buff *skb, gfp_t gfp_mask)
 {
 	if (likely(!skb_zcopy(skb)))
 		return 0;
-	if (skb_uarg(skb)->callback == sock_zerocopy_callback)
+	if (!skb_zcopy_is_nouarg(skb) &&
+	    skb_uarg(skb)->callback == sock_zerocopy_callback)
 		return 0;
 	return skb_copy_ubufs(skb, gfp_mask);
 }
@@ -3226,11 +3229,6 @@ static inline int __skb_grow_rcsum(struct sk_buff *skb, unsigned int len)
 #define skb_rbtree_walk(skb, root)						\
 		for (skb = skb_rb_first(root); skb != NULL;			\
 		     skb = skb_rb_next(skb))
-
-#define skb_rbtree_walk_safe(skb, root, tmp)					\
-		for (skb = skb_rb_first(root);					\
-		     tmp = skb ? skb_rb_next(skb) : NULL, (skb != NULL);	\
-		     skb = tmp)
 
 #define skb_rbtree_walk_from(skb)						\
 		for (; skb != NULL;						\

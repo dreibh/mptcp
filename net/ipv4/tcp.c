@@ -400,6 +400,8 @@ static u64 tcp_compute_delivery_rate(const struct tcp_sock *tp)
 	return rate64;
 }
 
+static int select_size(const struct sock *sk, bool first_skb, bool zc);
+
 const struct tcp_sock_ops tcp_specific = {
 	.__select_window		= __tcp_select_window,
 	.select_window			= tcp_select_window,
@@ -1173,7 +1175,7 @@ int linear_payload_sz(bool first_skb)
 	return 0;
 }
 
-int select_size(const struct sock *sk, bool first_skb, bool zc)
+static int select_size(const struct sock *sk, bool first_skb, bool zc)
 {
 	if (zc)
 		return 0;
@@ -4133,6 +4135,7 @@ void __init tcp_init(void)
 	unsigned long limit;
 	unsigned int i;
 
+	BUILD_BUG_ON(TCP_MIN_SND_MSS <= MAX_TCP_OPTION_SPACE);
 	BUILD_BUG_ON(sizeof(struct tcp_skb_cb) >
 		     FIELD_SIZEOF(struct sk_buff, cb));
 

@@ -21,6 +21,7 @@
 
 #include <linux/module.h>
 #include <net/mptcp.h>
+#include <trace/events/tcp.h>
 
 static unsigned char lambda __read_mostly = 12;
 module_param(lambda, byte, 0644);
@@ -267,7 +268,7 @@ static struct sk_buff *mptcp_blest_rcv_buf_optimization(struct sock *sk, int pen
 	if (tcp_jiffies32 - blest_p->last_rbuf_opti < usecs_to_jiffies(tp->srtt_us >> 3))
 		goto retrans;
 
-	/* Half the cwnd of the slow flow */
+	/* Half the cwnd of the slow flows */
 	mptcp_for_each_sub(tp->mpcb, mptcp) {
 		struct tcp_sock *tp_it = mptcp->tp;
 
@@ -284,7 +285,6 @@ static struct sk_buff *mptcp_blest_rcv_buf_optimization(struct sock *sk, int pen
 
 				blest_p->last_rbuf_opti = tcp_jiffies32;
 			}
-			break;
 		}
 	}
 
@@ -312,8 +312,10 @@ retrans:
 			}
 		}
 
-		if (do_retrans && mptcp_is_available(sk, skb_head, false))
+		if (do_retrans && mptcp_is_available(sk, skb_head, false)) {
+			trace_mptcp_retransmit(sk, skb_head);
 			return skb_head;
+		}
 	}
 	return NULL;
 }

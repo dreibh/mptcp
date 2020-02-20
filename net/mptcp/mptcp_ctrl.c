@@ -1192,6 +1192,7 @@ static int mptcp_alloc_mpcb(struct sock *meta_sk, __u64 remote_key,
 		goto err_alloc_master;
 
 	master_tp = tcp_sk(master_sk);
+	master_tp->inside_tk_table = 0;
 
 	mpcb = kmem_cache_zalloc(mptcp_cb_cache, GFP_ATOMIC);
 	if (!mpcb)
@@ -1263,7 +1264,6 @@ static int mptcp_alloc_mpcb(struct sock *meta_sk, __u64 remote_key,
 		local_bh_enable();
 		rcu_read_unlock();
 	}
-	master_tp->inside_tk_table = 0;
 
 #if IS_ENABLED(CONFIG_IPV6)
 	if (meta_icsk->icsk_af_ops == &mptcp_v6_mapped) {
@@ -2215,11 +2215,6 @@ int mptcp_check_req_fastopen(struct sock *child, struct request_sock *req)
 	/* Handled by the master_sk */
 	tcp_sk(meta_sk)->fastopen_rsk = NULL;
 
-	/* Subflow establishment is now lockless, drop the lock here it will
-	 * be taken again in tcp_child_process().
-	 */
-	bh_unlock_sock(meta_sk);
-
 	return 0;
 }
 
@@ -2268,11 +2263,6 @@ int mptcp_check_req_master(struct sock *sk, struct sock *child,
 		}
 	}
 
-	/* Subflow establishment is now lockless, drop the lock here it will
-	 * be taken again in tcp_child_process().
-	 */
-	bh_unlock_sock(meta_sk);
-
 	return 0;
 }
 
@@ -2287,8 +2277,6 @@ struct sock *mptcp_check_req_child(struct sock *meta_sk,
 	struct mptcp_request_sock *mtreq = mptcp_rsk(req);
 	struct tcp_sock *child_tp = tcp_sk(child);
 	u8 hash_mac_check[20];
-
-	child_tp->inside_tk_table = 0;
 
 	if (!mopt->join_ack) {
 		MPTCP_INC_STATS(sock_net(meta_sk), MPTCP_MIB_JOINACKFAIL);
@@ -2372,6 +2360,7 @@ teardown:
 	reqsk_queue_removed(&inet_csk(meta_sk)->icsk_accept_queue, req);
 	inet_csk_prepare_forced_close(child);
 	tcp_done(child);
+	bh_unlock_sock(meta_sk);
 	return meta_sk;
 }
 
@@ -2432,11 +2421,12 @@ void mptcp_twsk_destructor(struct tcp_timewait_sock *tw)
 		if (tw->mptcp_tw->in_list) {
 			list_del_rcu(&tw->mptcp_tw->list);
 			tw->mptcp_tw->in_list = 0;
+			/* Put, because we added it to the list */
+			mptcp_mpcb_put(mpcb);
 		}
 		spin_unlock(&mpcb->mpcb_list_lock);
 
-		/* Twice, because we increased it above */
-		mptcp_mpcb_put(mpcb);
+		/* Second time, because we increased it above */
 		mptcp_mpcb_put(mpcb);
 	}
 

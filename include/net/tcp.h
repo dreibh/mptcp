@@ -53,7 +53,7 @@ extern struct inet_hashinfo tcp_hashinfo;
 extern struct percpu_counter tcp_orphan_count;
 void tcp_time_wait(struct sock *sk, int state, int timeo);
 
-#define MAX_TCP_HEADER	(128 + MAX_HEADER)
+#define MAX_TCP_HEADER	L1_CACHE_ALIGN(128 + MAX_HEADER)
 #define MAX_TCP_OPTION_SPACE 40
 #define TCP_MIN_SND_MSS		48
 #define TCP_MIN_GSO_SIZE	(TCP_MIN_SND_MSS - MAX_TCP_OPTION_SPACE)
@@ -346,7 +346,6 @@ extern const struct tcp_request_sock_ops tcp_request_sock_ipv6_ops;
 struct mptcp_options_received;
 
 void tcp_cleanup_rbuf(struct sock *sk, int copied);
-void tcp_cwnd_validate(struct sock *sk, bool is_cwnd_limited);
 int tcp_close_state(struct sock *sk);
 void tcp_minshall_update(struct tcp_sock *tp, unsigned int mss_now,
 			 const struct sk_buff *skb);
@@ -1529,6 +1528,19 @@ static inline int tcp_full_space(const struct sock *sk)
 	return tcp_win_from_space(sk, sk->sk_rcvbuf);
 }
 
+/* We provision sk_rcvbuf around 200% of sk_rcvlowat.
+ * If 87.5 % (7/8) of the space has been consumed, we want to override
+ * SO_RCVLOWAT constraint, since we are receiving skbs with too small
+ * len/truesize ratio.
+ */
+static inline bool tcp_rmem_pressure(const struct sock *sk)
+{
+	int rcvbuf = READ_ONCE(sk->sk_rcvbuf);
+	int threshold = rcvbuf - (rcvbuf >> 3);
+
+	return atomic_read(&sk->sk_rmem_alloc) > threshold;
+}
+
 extern void tcp_openreq_init_rwin(struct request_sock *req,
 				  const struct sock *sk_listener,
 				  const struct dst_entry *dst);
@@ -2069,7 +2081,6 @@ struct tcp_sock_ops {
 	void (*retransmit_timer)(struct sock *sk);
 	void (*time_wait)(struct sock *sk, int state, int timeo);
 	void (*cleanup_rbuf)(struct sock *sk, int copied);
-	void (*cwnd_validate)(struct sock *sk, bool is_cwnd_limited);
 	int (*set_cong_ctrl)(struct sock *sk, const char *name, bool load,
 			     bool reinit, bool cap_net_admin);
 };

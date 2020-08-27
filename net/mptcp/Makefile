@@ -8,6 +8,7 @@ obj-$(CONFIG_MPTCP) += mptcp.o
 mptcp-y := mptcp_ctrl.o mptcp_ipv4.o mptcp_pm.o \
 	   mptcp_output.o mptcp_input.o mptcp_sched.o
 
+obj-$(CONFIG_TCP_CONG_CMTRPV2) += mptcp_cmtrpv2.o
 obj-$(CONFIG_TCP_CONG_LIA) += mptcp_coupled.o
 obj-$(CONFIG_TCP_CONG_OLIA) += mptcp_olia.o
 obj-$(CONFIG_TCP_CONG_WVEGAS) += mptcp_wvegas.o

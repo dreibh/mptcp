@@ -121,6 +121,10 @@ static u32 mptcp_cmtrpv2_calc_ssthresh(struct sock *sk)
 	return new_ssthresh;
 }
 
+static void mptcp_cmtrpv2_init(struct sock *sk)
+{
+}
+
 static void mptcp_cmtrpv2_cwnd_event(struct sock *sk, enum tcp_ca_event event)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
@@ -222,8 +226,10 @@ u32 mptcp_cmtrpv2_ssthresh(struct sock *sk)
 }
 
 static struct tcp_congestion_ops mptcp_cmtrpv2 = {
+	.init		= mptcp_cmtrpv2_init,
 	.ssthresh	  = mptcp_cmtrpv2_ssthresh,
 	.cong_avoid	  = mptcp_cmtrpv2_cong_avoid,
+	.undo_cwnd	= tcp_reno_undo_cwnd,
 	.cwnd_event   = mptcp_cmtrpv2_cwnd_event,
 	.set_state	  = mptcp_cmtrpv2_set_state,
 	.owner		  = THIS_MODULE,

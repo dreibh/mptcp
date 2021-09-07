@@ -688,7 +688,6 @@ static inline struct sock *mptcp_to_sock(const struct mptcp_tcp_sock *mptcp)
 	mptcp_for_each_bit_set(~b, i)
 
 #define MPTCP_INC_STATS(net, field)	SNMP_INC_STATS((net)->mptcp.mptcp_statistics, field)
-#define MPTCP_INC_STATS_BH(net, field)	__SNMP_INC_STATS((net)->mptcp.mptcp_statistics, field)
 
 enum
 {
@@ -1314,9 +1313,6 @@ static inline int mptcp_subflow_count(const struct mptcp_cb *mpcb)
 /* TCP and MPTCP mpc flag-depending functions */
 u16 mptcp_select_window(struct sock *sk);
 void mptcp_tcp_set_rto(struct sock *sk);
-
-/* TCP and MPTCP flag-depending functions */
-bool mptcp_prune_ofo_queue(struct sock *sk);
 
 #else /* CONFIG_MPTCP */
 #define mptcp_debug(fmt, args...)	\

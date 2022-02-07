@@ -993,7 +993,7 @@ static int tcp_send_mss(struct sock *sk, int *size_goal, int flags)
  */
 static void tcp_remove_empty_skb(struct sock *sk, struct sk_buff *skb)
 {
-	if (skb && !skb->len) {
+	if (skb && TCP_SKB_CB(skb)->seq == TCP_SKB_CB(skb)->end_seq) {
 		tcp_unlink_write_queue(skb, sk);
 		if (tcp_write_queue_empty(sk))
 			tcp_chrono_stop(sk, TCP_CHRONO_BUSY);
@@ -3338,7 +3338,7 @@ static int do_tcp_setsockopt(struct sock *sk, int level,
 		if (mptcp_init_failed || !sysctl_mptcp_enabled ||
 		    sk->sk_state != TCP_CLOSE
 #ifdef CONFIG_TCP_MD5SIG
-		    || tp->md5sig_info
+		    || rcu_access_pointer(tp->md5sig_info)
 #endif
 								) {
 			err = -EPERM;

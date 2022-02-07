@@ -73,6 +73,7 @@
 #include <net/lwtunnel.h>
 #include <net/ipv6_stubs.h>
 #include <net/bpf_sk_storage.h>
+#include <net/mptcp.h>
 
 /**
  *	sk_filter_trim_cap - run a packet through a socket filter
@@ -4280,6 +4281,19 @@ BPF_CALL_5(bpf_setsockopt, struct bpf_sock_ops_kern *, bpf_sock,
 			if (sk->sk_mark != val) {
 				sk->sk_mark = val;
 				sk_dst_reset(sk);
+
+				if (is_meta_sk(sk)) {
+					struct mptcp_tcp_sock *mptcp;
+
+					mptcp_for_each_sub(tcp_sk(sk)->mpcb, mptcp) {
+						struct sock *sk_it = mptcp_to_sock(mptcp);
+
+						if (val != sk_it->sk_mark) {
+							sk_it->sk_mark = val;
+							sk_dst_reset(sk_it);
+						}
+					}
+				}
 			}
 			break;
 		default:
@@ -4302,6 +4316,14 @@ BPF_CALL_5(bpf_setsockopt, struct bpf_sock_ops_kern *, bpf_sock,
 				if (val == -1)
 					val = 0;
 				inet->tos = val;
+
+				/* Update TOS on mptcp subflow */
+				if (is_meta_sk(sk)) {
+					struct mptcp_tcp_sock *mptcp;
+
+					mptcp_for_each_sub(tcp_sk(sk)->mpcb, mptcp)
+						inet_sk(mptcp_to_sock(mptcp))->tos = val;
+				}
 			}
 			break;
 		default:
@@ -4324,6 +4346,17 @@ BPF_CALL_5(bpf_setsockopt, struct bpf_sock_ops_kern *, bpf_sock,
 				if (val == -1)
 					val = 0;
 				np->tclass = val;
+
+				if (is_meta_sk(sk)) {
+					struct mptcp_tcp_sock *mptcp;
+
+					mptcp_for_each_sub(tcp_sk(sk)->mpcb, mptcp) {
+						struct sock *sk_it = mptcp_to_sock(mptcp);
+
+						if (sk_it->sk_family == AF_INET6)
+							inet6_sk(sk_it)->tclass = val;
+					}
+				}
 			}
 			break;
 		default:
@@ -8356,6 +8389,27 @@ static u32 sk_skb_convert_ctx_access(enum bpf_access_type type,
 		*insn++ = BPF_LDX_MEM(BPF_SIZEOF(void *), si->dst_reg,
 				      si->src_reg, off);
 		break;
+	case offsetof(struct __sk_buff, cb[0]) ...
+	     offsetofend(struct __sk_buff, cb[4]) - 1:
+		BUILD_BUG_ON(sizeof_field(struct sk_skb_cb, data) < 20);
+		BUILD_BUG_ON((offsetof(struct sk_buff, cb) +
+			      offsetof(struct sk_skb_cb, data)) %
+			     sizeof(__u64));
+
+		prog->cb_access = 1;
+		off  = si->off;
+		off -= offsetof(struct __sk_buff, cb[0]);
+		off += offsetof(struct sk_buff, cb);
+		off += offsetof(struct sk_skb_cb, data);
+		if (type == BPF_WRITE)
+			*insn++ = BPF_STX_MEM(BPF_SIZE(si->code), si->dst_reg,
+					      si->src_reg, off);
+		else
+			*insn++ = BPF_LDX_MEM(BPF_SIZE(si->code), si->dst_reg,
+					      si->src_reg, off);
+		break;
+
+
 	default:
 		return bpf_convert_ctx_access(type, si, insn_buf, prog,
 					      target_size);

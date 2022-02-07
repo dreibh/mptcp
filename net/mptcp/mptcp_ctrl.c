@@ -1097,6 +1097,10 @@ static void mptcp_sub_inherit_sockopts(const struct sock *meta_sk, struct sock *
 		sk_dst_reset(sub_sk);
 	}
 
+	/* IPV6_TCLASS */
+	if (sub_sk->sk_family == AF_INET6 && meta_sk->sk_family == AF_INET6)
+		inet6_sk(sub_sk)->tclass = inet6_sk(meta_sk)->tclass;
+
 	/* Inherit SO_REUSEADDR */
 	sub_sk->sk_reuse = meta_sk->sk_reuse;
 
@@ -1453,6 +1457,8 @@ static int mptcp_alloc_mpcb(struct sock *meta_sk, __u64 remote_key,
 	master_sk->tcp_rtx_queue = RB_ROOT;
 	INIT_LIST_HEAD(&master_tp->tsq_node);
 	INIT_LIST_HEAD(&master_tp->tsorted_sent_queue);
+
+	master_tp->fastopen_req = NULL;
 
 	master_sk->sk_tsq_flags = 0;
 	/* icsk_bind_hash inherited from the meta, but it will be properly set in

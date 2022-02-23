@@ -219,7 +219,7 @@ static int mptcp_rcv_state_process(struct sock *meta_sk, struct sock *sk,
 			   meta_tp->rcv_nxt))) {
 			mptcp_send_active_reset(meta_sk, GFP_ATOMIC);
 			tcp_done(meta_sk);
-			__NET_INC_STATS(sock_net(meta_sk), LINUX_MIB_TCPABORTONDATA);
+			NET_INC_STATS(sock_net(meta_sk), LINUX_MIB_TCPABORTONDATA);
 			return -1;
 		}
 
@@ -260,7 +260,7 @@ static int mptcp_rcv_state_process(struct sock *meta_sk, struct sock *sk,
 			if (TCP_SKB_CB(skb)->end_seq != TCP_SKB_CB(skb)->seq &&
 			    after(TCP_SKB_CB(skb)->end_seq - th->fin, tp->rcv_nxt) &&
 			    !mptcp_is_data_fin2(skb, tp)) {
-				__NET_INC_STATS(sock_net(meta_sk), LINUX_MIB_TCPABORTONDATA);
+				NET_INC_STATS(sock_net(meta_sk), LINUX_MIB_TCPABORTONDATA);
 				mptcp_send_active_reset(meta_sk, GFP_ATOMIC);
 				tcp_reset(meta_sk);
 				return -1;
@@ -2229,8 +2229,7 @@ static void _mptcp_rcv_synsent_fastopen(struct sock *meta_sk,
 	 * comes from __tcp_retransmit_skb().
 	 */
 	if (before(TCP_SKB_CB(skb)->seq, master_tp->snd_una)) {
-		BUG_ON(before(TCP_SKB_CB(skb)->end_seq,
-			      master_tp->snd_una));
+		BUG_ON(before(TCP_SKB_CB(skb)->end_seq, master_tp->snd_una));
 		/* tcp_trim_head can only returns ENOMEM if skb is
 		 * cloned. It is not the case here (see
 		 * tcp_send_syn_data).
@@ -2246,12 +2245,11 @@ static void _mptcp_rcv_synsent_fastopen(struct sock *meta_sk,
 
 	if (rtx_queue)
 		tcp_rtx_queue_unlink(skb, meta_sk);
-	else
-		tcp_unlink_write_queue(skb, meta_sk);
 
 	INIT_LIST_HEAD(&skb->tcp_tsorted_anchor);
 
-	tcp_add_write_queue_tail(meta_sk, skb);
+	if (rtx_queue)
+		tcp_add_write_queue_tail(meta_sk, skb);
 }
 
 /* In case of fastopen, some data can already be in the write queue.
@@ -2275,7 +2273,7 @@ static void mptcp_rcv_synsent_fastopen(struct sock *meta_sk)
 	 * this data to data sequence numbers.
 	 */
 
-	WARN_ON(skb_write_head && skb_rtx_head);
+	BUG_ON(skb_write_head && skb_rtx_head);
 
 	if (skb_write_head) {
 		skb_queue_walk_from_safe(&meta_sk->sk_write_queue,
@@ -2384,9 +2382,6 @@ int mptcp_rcv_synsent_state_process(struct sock *sk, struct sock **skptr,
 			MPTCP_INC_STATS(sock_net(sk), MPTCP_MIB_CSUMENABLED);
 
 		tp->mptcp->include_mpc = 1;
-
-		/* Ensure that fastopen is handled at the meta-level. */
-		tp->fastopen_req = NULL;
 
 		sk_set_socket(sk, meta_sk->sk_socket);
 		sk->sk_wq = meta_sk->sk_wq;

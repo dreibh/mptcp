@@ -1358,6 +1358,8 @@ static int mptcp_alloc_mpcb(struct sock *meta_sk, __u64 remote_key,
 	INIT_LIST_HEAD(&master_tp->tsq_node);
 	INIT_LIST_HEAD(&master_tp->tsorted_sent_queue);
 
+	master_tp->fastopen_req = NULL;
+
 	master_sk->sk_tsq_flags = 0;
 	/* icsk_bind_hash inherited from the meta, but it will be properly set in
 	 * mptcp_create_master_sk. Same operation is done in inet_csk_clone_lock.
@@ -2664,7 +2666,7 @@ int mptcp_conn_request(struct sock *sk, struct sk_buff *skb)
 #endif
 	}
 drop:
-	__NET_INC_STATS(sock_net(sk), LINUX_MIB_LISTENDROPS);
+	NET_INC_STATS(sock_net(sk), LINUX_MIB_LISTENDROPS);
 	return 0;
 }
 

@@ -1930,8 +1930,8 @@ void mptcp_close(struct sock *meta_sk, long timeout)
 	int data_was_unread = 0;
 	int state;
 
-	mptcp_debug("%s: Close of meta_sk with tok %#x\n",
-		    __func__, mpcb->mptcp_loc_token);
+	mptcp_debug("%s: Close of meta_sk with tok %#x state %u\n",
+		    __func__, mpcb->mptcp_loc_token, meta_sk->sk_state);
 
 	WARN_ON(refcount_inc_not_zero(&mpcb->mpcb_refcnt) == 0);
 	mutex_lock(&mpcb->mpcb_mutex);
@@ -1967,6 +1967,7 @@ void mptcp_close(struct sock *meta_sk, long timeout)
 
 			if (tcp_sk(sk_it)->send_mp_fclose)
 				continue;
+
 			mptcp_sub_close(sk_it, 0);
 		}
 		goto adjudge_to_death;
@@ -2092,7 +2093,6 @@ adjudge_to_death:
 		}
 	}
 
-
 	if (meta_sk->sk_state == TCP_CLOSE)
 		inet_csk_destroy_sock(meta_sk);
 	/* Otherwise, socket is reprieved until protocol close. */
@@ -2151,7 +2151,6 @@ void mptcp_disconnect(struct sock *meta_sk)
 #endif
 	meta_sk->sk_destruct = inet_sock_destruct;
 }
-
 
 /* Returns True if we should enable MPTCP for that socket. */
 bool mptcp_doit(struct sock *sk)
@@ -3257,7 +3256,6 @@ void __init mptcp_init(void)
 
 	for (i = 0; i <= mptcp_reqsk_tk_htb.mask; i++)
 		INIT_HLIST_NULLS_HEAD(&mptcp_reqsk_tk_htb.hashtable[i], i);
-
 
 	spin_lock_init(&mptcp_tk_hashlock);
 

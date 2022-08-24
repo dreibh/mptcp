@@ -691,6 +691,7 @@ static inline struct sock *mptcp_to_sock(const struct mptcp_tcp_sock *mptcp)
 	mptcp_for_each_bit_set(~b, i)
 
 #define MPTCP_INC_STATS(net, field)	SNMP_INC_STATS((net)->mptcp.mptcp_statistics, field)
+#define MPTCP_ADD_STATS(net, field, val)	SNMP_ADD_STATS((net)->mptcp.mptcp_statistics, field, val)
 
 enum
 {
@@ -871,7 +872,6 @@ void mptcp_reqsk_init(struct request_sock *req, const struct sock *sk,
 int mptcp_conn_request(struct sock *sk, struct sk_buff *skb);
 void mptcp_enable_sock(struct sock *sk);
 void mptcp_disable_sock(struct sock *sk);
-void mptcp_disable_static_key(void);
 void mptcp_cookies_reqsk_init(struct request_sock *req,
 			      struct mptcp_options_received *mopt,
 			      struct sk_buff *skb);

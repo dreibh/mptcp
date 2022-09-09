@@ -150,6 +150,13 @@ static int tcp_orphan_retries(struct sock *sk, bool alive)
 	if (sk->sk_err_soft && !alive)
 		retries = 0;
 
+	/* If the app called close() and we don't have any subflows left,
+	 * be aggressive at killing the connection. Otherwise we will linger
+	 * around for a very long time.
+	 */
+	if (is_meta_sk(sk) && hlist_empty(&tcp_sk(sk)->mpcb->conn_list))
+		retries = 1;
+
 	/* However, if socket sent something recently, select some safe
 	 * number of retries. 8 corresponds to >100 seconds with minimal
 	 * RTO of 200msec. */
@@ -796,9 +803,10 @@ static enum hrtimer_restart tcp_compressed_ack_kick(struct hrtimer *timer)
 {
 	struct tcp_sock *tp = container_of(timer, struct tcp_sock, compressed_ack_timer);
 	struct sock *sk = (struct sock *)tp;
+	struct sock *meta_sk = mptcp(tp) ? mptcp_meta_sk(sk) : sk;
 
-	bh_lock_sock(sk);
-	if (!sock_owned_by_user(sk)) {
+	bh_lock_sock(meta_sk);
+	if (!sock_owned_by_user(meta_sk)) {
 		if (tp->compressed_ack > TCP_FASTRETRANS_THRESH)
 			tcp_send_ack(sk);
 	} else {
@@ -806,7 +814,7 @@ static enum hrtimer_restart tcp_compressed_ack_kick(struct hrtimer *timer)
 				      &sk->sk_tsq_flags))
 			sock_hold(sk);
 	}
-	bh_unlock_sock(sk);
+	bh_unlock_sock(meta_sk);
 
 	sock_put(sk);
 

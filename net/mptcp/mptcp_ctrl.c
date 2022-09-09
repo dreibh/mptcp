@@ -2017,9 +2017,6 @@ void mptcp_disconnect(struct sock *meta_sk)
 	mptcp_for_each_sub_safe(meta_tp->mpcb, mptcp, tmp) {
 		struct sock *subsk = mptcp_to_sock(mptcp);
 
-		if (spin_is_locked(&subsk->sk_lock.slock))
-			bh_unlock_sock(subsk);
-
 		tcp_sk(subsk)->tcp_disconnect = 1;
 
 		meta_sk->sk_prot->disconnect(subsk, O_NONBLOCK);
@@ -2162,9 +2159,6 @@ static int __mptcp_check_req_master(struct sock *child,
 	 */
 	mptcp_reqsk_remove_tk(req);
 
-	/* Hold when creating the meta-sk in tcp_vX_syn_recv_sock. */
-	sock_put(meta_sk);
-
 	return 0;
 }
 
@@ -2240,9 +2234,7 @@ int mptcp_check_req_master(struct sock *sk, struct sock *child,
 		reqsk_queue_removed(&inet_csk(sk)->icsk_accept_queue, req);
 		if (!inet_csk_reqsk_queue_add(sk, req, meta_sk)) {
 			bh_unlock_sock(meta_sk);
-			/* No sock_put() of the meta needed. The reference has
-			 * already been dropped in __mptcp_check_req_master().
-			 */
+			sock_put(meta_sk);
 			sock_put(child);
 			return -1;
 		}
@@ -2252,14 +2244,14 @@ int mptcp_check_req_master(struct sock *sk, struct sock *child,
 		tcp_sk(meta_sk)->tsoffset = tsoff;
 		if (!inet_csk_reqsk_queue_add(sk, req, meta_sk)) {
 			bh_unlock_sock(meta_sk);
-			/* No sock_put() of the meta needed. The reference has
-			 * already been dropped in __mptcp_check_req_master().
-			 */
+			sock_put(meta_sk);
 			sock_put(child);
 			reqsk_put(req);
 			return -1;
 		}
 	}
+
+	sock_put(meta_sk);
 
 	return 0;
 }
@@ -3139,3 +3131,15 @@ mptcp_cb_cache_failed:
 mptcp_sock_cache_failed:
 	mptcp_init_failed = true;
 }
+
+#ifdef CONFIG_MPTCP_DEBUG_LOCK
+void mptcp_check_lock(struct sock *sk)
+{
+	struct tcp_sock *tp = tcp_sk(sk);
+	/* make sure the meta lock is held when we hold the sublock */
+	if (mptcp(tp) && !is_meta_tp(tp) && tp->meta_sk)
+		WARN_ON(!spin_is_locked(&tp->meta_sk->sk_lock.slock) &&
+			!sock_owned_by_user(tp->meta_sk));
+}
+EXPORT_SYMBOL(mptcp_check_lock);
+#endif

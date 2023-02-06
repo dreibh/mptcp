@@ -313,7 +313,7 @@ struct tcp_sock {
 	u32	packets_out;	/* Packets which are "in flight"	*/
 	u32	retrans_out;	/* Retransmitted packets out		*/
 	u32	max_packets_out;  /* max packets_out in last window */
-	u32	max_packets_seq;  /* right edge of max_packets_out flight */
+	u32	cwnd_usage_seq;  /* right edge of cwnd usage tracking flight */
 
 	u16	urg_data;	/* Saved octet of OOB data and control flags */
 	u8	ecn_flags;	/* ECN status bits.			*/
@@ -482,9 +482,9 @@ struct tcp_sock {
 		record_master_info:1,
 		tcp_disconnect:1;
 	struct mptcp_tcp_sock *mptcp;
-#ifdef CONFIG_MPTCP
 #define MPTCP_SCHED_NAME_MAX 16
 #define MPTCP_PM_NAME_MAX 16
+#ifdef CONFIG_MPTCP
 	struct hlist_nulls_node tk_table;
 	u32		mptcp_loc_token;
 	u64		mptcp_loc_key;

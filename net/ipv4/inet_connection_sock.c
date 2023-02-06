@@ -908,11 +908,25 @@ void inet_csk_prepare_forced_close(struct sock *sk)
 }
 EXPORT_SYMBOL(inet_csk_prepare_forced_close);
 
+static int inet_ulp_can_listen(const struct sock *sk)
+{
+	const struct inet_connection_sock *icsk = inet_csk(sk);
+
+	if (icsk->icsk_ulp_ops)
+		return -EINVAL;
+
+	return 0;
+}
+
 int inet_csk_listen_start(struct sock *sk, int backlog)
 {
 	struct inet_connection_sock *icsk = inet_csk(sk);
 	struct inet_sock *inet = inet_sk(sk);
-	int err = -EADDRINUSE;
+	int err;
+
+	err = inet_ulp_can_listen(sk);
+	if (unlikely(err))
+		return err;
 
 	reqsk_queue_alloc(&icsk->icsk_accept_queue);
 
@@ -972,13 +986,15 @@ struct sock *inet_csk_reqsk_queue_add(struct sock *sk,
 
 	spin_lock(&queue->rskq_lock);
 	if (unlikely(sk->sk_state != TCP_LISTEN)) {
-		struct tcp_sock *tp = tcp_sk(sk);
+		if (sk->sk_protocol == IPPROTO_TCP) {
+			struct tcp_sock *child_tp = tcp_sk(child);
 
-		/* in case of mptcp, two locks may been taken, one
-		 * on the meta, the other on master_sk
-		 */
-		if (mptcp(tp) && tp->mpcb && tp->mpcb->master_sk)
-			bh_unlock_sock(tp->mpcb->master_sk);
+			/* in case of mptcp, two locks may been taken, one
+			 * on the meta, the other on master_sk
+			 */
+			if (mptcp(child_tp) && child_tp->mpcb && child_tp->mpcb->master_sk)
+				bh_unlock_sock(child_tp->mpcb->master_sk);
+		}
 
 		inet_child_forget(sk, req, child);
 		child = NULL;
